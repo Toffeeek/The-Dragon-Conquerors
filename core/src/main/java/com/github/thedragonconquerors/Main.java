@@ -1,11 +1,60 @@
 package com.github.thedragonconquerors;
 
 import com.badlogic.gdx.Game;
+import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.g2d.Batch;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.utils.GdxRuntimeException;
+import com.badlogic.gdx.utils.Null;
+import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.utils.viewport.Viewport;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms. */
 public class Main extends Game {
+    public static final float WORLD_WIDTH = 16f;
+    public static final float WORLD_HEIGHT = 9f;
+
+    private Batch batch;
+    private OrthographicCamera camera;
+    private Viewport viewport;
+
+    private final Map<Class<? extends Screen>, Screen> screenCache = new HashMap<>();
+
     @Override
     public void create() {
-        setScreen(new FirstScreen());
+        this.batch = new SpriteBatch();
+        this.camera = new OrthographicCamera();
+        this.viewport = new FitViewport(WORLD_WIDTH, WORLD_HEIGHT, camera);
+
+        addScreen(new GameScreen(this));
+        setScreen(GameScreen.class);
+    }
+
+    @Override
+    public void resize(int width, int height){
+        viewport.update(width, height, true);
+        super.resize(width, height);
+    }
+
+    public void addScreen(Screen screen){
+        screenCache.put(screen.getClass(), screen);
+    }
+
+    public void setScreen(Class<? extends Screen> screenClass){
+        Screen screen = screenCache.get(screenClass);
+        if(screen == null)  throw new GdxRuntimeException("No screen with class " + screenClass + " found");
+
+        super.setScreen(screen);
+    }
+
+    @Override
+    public void dispose(){
+        screenCache.values().forEach(Screen::dispose);
+        screenCache.clear();
+        this.batch.dispose();
     }
 }
