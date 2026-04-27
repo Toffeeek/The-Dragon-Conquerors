@@ -2,6 +2,7 @@ package com.github.thedragonconquerors;
 
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.assets.loaders.resolvers.InternalFileHandleResolver;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -9,6 +10,7 @@ import com.badlogic.gdx.utils.GdxRuntimeException;
 import com.badlogic.gdx.utils.Null;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
+import com.github.thedragonconquerors.assets.AssetService;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -21,6 +23,7 @@ public class Main extends Game {
     private Batch batch;
     private OrthographicCamera camera;
     private Viewport viewport;
+    private AssetService assetService;
 
     private final Map<Class<? extends Screen>, Screen> screenCache = new HashMap<>();
 
@@ -29,13 +32,14 @@ public class Main extends Game {
         this.batch = new SpriteBatch();
         this.camera = new OrthographicCamera();
         this.viewport = new FitViewport(WORLD_WIDTH, WORLD_HEIGHT, camera);
+        this.assetService = new AssetService(new InternalFileHandleResolver());
 
-        addScreen(new GameScreen(this));
-        setScreen(GameScreen.class);
+        addScreen(new FirstScreen(this));
+        setScreen(FirstScreen.class);
     }
 
     @Override
-    public void resize(int width, int height){
+    public void resize(int width, int height){      //ensures that if the size of the window changes, it does no distort the overall rendering
         viewport.update(width, height, true);
         super.resize(width, height);
     }
@@ -55,6 +59,25 @@ public class Main extends Game {
     public void dispose(){
         screenCache.values().forEach(Screen::dispose);
         screenCache.clear();
+
         this.batch.dispose();
+        this.assetService.debugDiagnostic();
+        this.assetService.dispose();
+    }
+
+    public Batch getBatch() {
+        return batch;
+    }
+
+    public AssetService getAssetService() {
+        return assetService;
+    }
+
+    public Viewport getViewport() {
+        return viewport;
+    }
+
+    public OrthographicCamera getCamera() {
+        return camera;
     }
 }
