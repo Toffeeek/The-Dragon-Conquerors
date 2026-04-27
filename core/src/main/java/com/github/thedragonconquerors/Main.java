@@ -19,6 +19,7 @@ import java.util.Map;
 public class Main extends Game {
     public static final float WORLD_WIDTH = 16f;
     public static final float WORLD_HEIGHT = 9f;
+    public static final float UNIT_SCALE = 1f/16f;
 
     private Batch batch;
     private OrthographicCamera camera;
