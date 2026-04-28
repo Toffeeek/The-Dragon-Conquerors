@@ -1,6 +1,7 @@
 package com.github.thedragonconquerors;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
@@ -8,7 +9,9 @@ import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.github.thedragonconquerors.core.GridManager;
+import com.github.thedragonconquerors.core.MovementSystem;
 import com.github.thedragonconquerors.entities.Player;
+import com.github.thedragonconquerors.input.MouseInputHandler;
 import com.github.thedragonconquerors.rendering.GridRenderer;
 import com.github.thedragonconquerors.rendering.PlayerRenderer;
 
@@ -19,11 +22,12 @@ public class FirstScreen extends ScreenAdapter {
     private final Viewport viewport;
     private final OrthographicCamera camera;
     //private final OrthogonalTiledMapRenderer mapRenderer;
-    //private MovementSystem movementSystem;
+    private MovementSystem movementSystem;
     private Player player;
     private PlayerRenderer playerRenderer;
     private GridManager gridManager;
     private GridRenderer gridRenderer;
+    private MouseInputHandler mouseInputHandler;
 
     public FirstScreen(Main game){
         this.game = game;
@@ -38,10 +42,18 @@ public class FirstScreen extends ScreenAdapter {
     public void show(){
         //build core system
         gridManager = new GridManager();
+        movementSystem = new MovementSystem(gridManager);
 
         // Spawn player at tile(2, 2)
         player = new Player(2, 2, 5);
         gridManager.getTile(2, 2).setOccupied(true);
+
+        //compute initial reachable tiles
+        movementSystem.computeReachableTiles(player);
+
+        //wire input
+        mouseInputHandler = new MouseInputHandler(camera, viewport, gridManager, movementSystem, player);
+        Gdx.input.setInputProcessor(mouseInputHandler);
 
         //build renderers
         gridRenderer = new GridRenderer(gridManager);
@@ -55,6 +67,9 @@ public class FirstScreen extends ScreenAdapter {
     public void render(float delta){
         //update player animation
         player.update(delta);
+
+        //handle end turn key
+        if(Gdx.input.isKeyJustPressed(Input.Keys.E))    endTurn();
 
         //clear screen
         ScreenUtils.clear(Color.BLACK);
@@ -75,6 +90,7 @@ public class FirstScreen extends ScreenAdapter {
     //ends current turn and resets player stamina
     private void endTurn(){
         player.resetStamin();
+        movementSystem.computeReachableTiles(player);
     }
 
     @Override
