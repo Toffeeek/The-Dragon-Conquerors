@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.12.1" orientation="orthogonal" renderorder="right-down" width="20" height="12" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="1">
+ <tileset firstgid="1" source="tileset.tsx"/>
+ <tileset firstgid="193" source="cliff-brown.tsx"/>
+ <tileset firstgid="211" source="Cliff_Tile_brown.tsx"/>
+ <layer id="3" name="background" width="20" height="12">
+  <data encoding="base64" compression="zlib">
+   eJyNk7EOwjAMRCMBnULVdkShYwUjUjvz1eT7MNJZOp2ciOENTZ1nx05ySulDLMYovIGuO5ORjRmOh3EHq1EbnI0LGLD28xXsfXZqinwlyKt1qu9GbOJrnbeKb0f9Gnel+Jdxon9+9iHwqbMG8e70/h3o/yI+nYXn5nju54T1TL1in85C96ivYI6z5PvHx+fpzZnPtFOf3BnFe0+juXltfp97Mx4lz0rffL8P8fWcrffGffH39gV/lDG+
+  </data>
+ </layer>
+ <layer id="1" name="ground" width="20" height="12" visible="0">
+  <data encoding="base64" compression="zlib">
+   eJxjYKAMhCKxpwBxOIXmJQJxEhTnUcE8ZBA6at6gMM8TiL2AuIoK5nlCzYGBSqjZIOxNhnmhaPwwJFxJpJkw/8H8iMs8ECbG/6FY9MEwAPKREYA=
+  </data>
+ </layer>
+ <layer id="2" name="foreground" width="20" height="12">
+  <data encoding="base64" compression="zlib">
+   eJxjYBgFo2AUDFUAAAPAAAE=
+  </data>
+ </layer>
+</map>

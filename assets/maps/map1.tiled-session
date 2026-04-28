@@ -1,0 +1,54 @@
+{
+    "activeFile": "",
+    "expandedProjectPaths": [
+    ],
+    "fileStates": {
+        "Cliff_Tile_brown.tsx": {
+            "scaleInDock": 1
+        },
+        "cliff-brown.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 8
+        },
+        "cliff-dark.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "tileset-dark.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 0.5
+        },
+        "tileset.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 8
+        },
+        "tilset.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 8
+        }
+    },
+    "last.imagePath": "/home/tawfiq/DemoGame/assets_raw/map",
+    "map.height": 12,
+    "map.lastUsedFormat": "tmx",
+    "map.layerDataFormat": "3",
+    "map.tileHeight": 16,
+    "map.tileWidth": 16,
+    "map.width": 20,
+    "openFiles": [
+    ],
+    "project": "map1.tiled-project",
+    "recentFiles": [
+        "cliff-brown.tsx",
+        "tileset-dark.tsx",
+        "cliff-dark.tsx",
+        "tilset.tsx",
+        "tileset.tsx"
+    ],
+    "tileset.lastUsedFormat": "tsx",
+    "tileset.margin": 0,
+    "tileset.spacing": 0,
+    "tileset.tileSize": {
+        "height": 16,
+        "width": 16
+    }
+}
