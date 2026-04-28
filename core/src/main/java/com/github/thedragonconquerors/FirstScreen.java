@@ -9,6 +9,9 @@ import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.github.thedragonconquerors.assets.AssetService;
 import com.github.thedragonconquerors.assets.MapAssets;
+import com.github.thedragonconquerors.core.MovementSystem;
+import com.github.thedragonconquerors.core.Player;
+import com.github.thedragonconquerors.rendering.PlayerRenderer;
 
 public class FirstScreen extends ScreenAdapter {
     private final Main game;
@@ -17,6 +20,9 @@ public class FirstScreen extends ScreenAdapter {
     private final Viewport viewport;
     private final OrthographicCamera camera;
     private final OrthogonalTiledMapRenderer mapRenderer;
+    private MovementSystem movementSystem;
+    private Player player;
+    private PlayerRenderer playerRenderer;
 
     public FirstScreen(Main game){
         this.game = game;
@@ -29,6 +35,12 @@ public class FirstScreen extends ScreenAdapter {
 
     @Override
     public void show(){
+        //build core system
+
+
+        // Spawn player at tile(2, 2)
+        player = new Player(2, 2, 5);
+
         this.assetService.load(MapAssets.MAIN);
         this.mapRenderer.setMap(this.assetService.get(MapAssets.MAIN));
     }
