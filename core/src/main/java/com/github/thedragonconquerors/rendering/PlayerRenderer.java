@@ -6,7 +6,7 @@ import com.github.thedragonconquerors.core.GridManager;
 import com.github.thedragonconquerors.core.Player;
 import com.badlogic.gdx.utils.Disposable;
 
-public class PlayerRenderer {
+public class PlayerRenderer implements Disposable {
     private final ShapeRenderer shapeRenderer;
     private final float tileSize = GridManager.TILE_WORLD_SIZE;
 
