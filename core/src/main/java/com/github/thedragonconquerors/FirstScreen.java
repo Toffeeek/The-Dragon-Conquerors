@@ -6,8 +6,11 @@ import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.Batch;
+import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.Viewport;
+import com.github.thedragonconquerors.assets.AssetService;
+import com.github.thedragonconquerors.assets.MapAssets;
 import com.github.thedragonconquerors.core.GridManager;
 import com.github.thedragonconquerors.core.MovementSystem;
 import com.github.thedragonconquerors.entities.Player;
@@ -45,8 +48,8 @@ public class FirstScreen extends ScreenAdapter {
         movementSystem = new MovementSystem(gridManager);
 
         // Spawn player at tile(2, 2)
-        player = new Player(2, 2, 5);
-        gridManager.getTile(2, 2).setOccupied(true);
+        player = new Player(4,2, 5);
+        gridManager.getTile(4, 2).setOccupied(true);
 
         //compute initial reachable tiles
         movementSystem.computeReachableTiles(player);

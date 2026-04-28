@@ -22,9 +22,58 @@ public class GridManager {  //manages the 2d grid of the environment
             for(int j=0; j<ROWS; j++)   tiles[i][j] = new Tile(i, j, TILE_WORLD_SIZE);
         }
 
+        setWalkable(0, 0, false);
+        setWalkable(1, 0, false);
+        setWalkable(2, 0, false);
+        setWalkable(3, 0, false);
+        setWalkable(4, 0, false);
+        setWalkable(0, 1, false);
+        setWalkable(1, 1, false);
+        setWalkable(2, 1, false);
+        setWalkable(3, 1, false);
+        setWalkable(0, 2, false);
+        setWalkable(1, 2, false);
+        setWalkable(2, 2, false);
+        setWalkable(0, 3, false);
+        setWalkable(0, 4, false);
+        setWalkable(0, 5, false);
+        setWalkable(1, 5, false);
+        setWalkable(2, 5, false);
+        setWalkable(3, 5, false);
+        setWalkable(3, 6, false);
+        setWalkable(2, 6, false);
+        setWalkable(2, 7, false);
+        setWalkable(1, 7, false);
+        setWalkable(1, 8, false);
+        setWalkable(1, 9, false);
+        setWalkable(1, 10, false);
+        setWalkable(3, 10, false);
+        setWalkable(4, 10, false);
+        setWalkable(4, 11, false);
+        setWalkable(4, 8, false);
+        setWalkable(5, 8, false);
+        setWalkable(6, 8, false);
+        setWalkable(7, 8, false);
+        setWalkable(7, 7, false);
+        setWalkable(7, 6, false);
+        setWalkable(8, 6, false);
+        setWalkable(8, 5, false);
+        setWalkable(8, 4, false);
+        setWalkable(8, 3, false);
+        setWalkable(8, 2, false);
+        setWalkable(7, 2, false);
+        setWalkable(6, 2, false);
+        setWalkable(5, 2, false);
+        setWalkable(5, 3, false);
+        setWalkable(5, 4, false);
         setWalkable(5, 5, false);
-        setWalkable(5, 6, false);
+        setWalkable(6, 5, false);
         setWalkable(6, 6, false);
+        setWalkable(11, 1, false);
+        setWalkable(12, 1, false);
+        setWalkable(12, 2, false);
+        setWalkable(11, 2, false);
+        setWalkable(2, 10, false);
     }
 
     public void setWalkable(int x, int y, boolean walkable){
