@@ -3,7 +3,7 @@ package com.github.thedragonconquerors.rendering;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.github.thedragonconquerors.core.GridManager;
-import com.github.thedragonconquerors.core.Player;
+import com.github.thedragonconquerors.entities.Player;
 import com.badlogic.gdx.utils.Disposable;
 
 public class PlayerRenderer implements Disposable {

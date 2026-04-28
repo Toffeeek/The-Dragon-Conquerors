@@ -1,10 +1,11 @@
-package com.github.thedragonconquerors.core;
+package com.github.thedragonconquerors.entities;
 
 import com.badlogic.gdx.math.Vector2;
+import com.github.thedragonconquerors.core.GridManager;
+import com.github.thedragonconquerors.core.Tile;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Vector;
 
 public class Player {
     private int gridX;

@@ -1,19 +1,14 @@
 package com.github.thedragonconquerors;
 
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.Batch;
-import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.Viewport;
-import com.github.thedragonconquerors.assets.AssetService;
-import com.github.thedragonconquerors.assets.MapAssets;
 import com.github.thedragonconquerors.core.GridManager;
-import com.github.thedragonconquerors.core.MovementSystem;
-import com.github.thedragonconquerors.core.Player;
+import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.rendering.GridRenderer;
 import com.github.thedragonconquerors.rendering.PlayerRenderer;
 
