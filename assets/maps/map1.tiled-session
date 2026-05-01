@@ -4,9 +4,11 @@
     ],
     "fileStates": {
         "Cliff_Tile_brown.tsx": {
+            "dynamicWrapping": true,
             "scaleInDock": 1
         },
         "cliff-brown.tsx": {
+            "dynamicWrapping": false,
             "scaleInDock": 1,
             "scaleInEditor": 8
         },
@@ -27,7 +29,7 @@
             "scaleInEditor": 8
         }
     },
-    "last.imagePath": "/home/tawfiq/DemoGame/assets_raw/map",
+    "last.imagePath": "/home/tawfiq/TDC/assets/maps",
     "map.height": 12,
     "map.lastUsedFormat": "tmx",
     "map.layerDataFormat": "3",

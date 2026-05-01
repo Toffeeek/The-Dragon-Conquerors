@@ -21,10 +21,10 @@ import com.github.thedragonconquerors.rendering.PlayerRenderer;
 public class FirstScreen extends ScreenAdapter {
     private final Main game;
     private final Batch batch;
-    //private final AssetService assetService;
+    private final AssetService assetService;
     private final Viewport viewport;
     private final OrthographicCamera camera;
-    //private final OrthogonalTiledMapRenderer mapRenderer;
+    private OrthogonalTiledMapRenderer mapRenderer;
     private MovementSystem movementSystem;
     private Player player;
     private PlayerRenderer playerRenderer;
@@ -34,11 +34,10 @@ public class FirstScreen extends ScreenAdapter {
 
     public FirstScreen(Main game){
         this.game = game;
-        //this.assetService = game.getAssetService();
+        this.assetService = game.getAssetService();
         this.viewport = game.getViewport();
         this.camera = game.getCamera();
         this.batch = game.getBatch();
-        //this.mapRenderer = new OrthogonalTiledMapRenderer(null, Main.UNIT_SCALE, this.batch);
     }
 
     @Override
@@ -62,8 +61,7 @@ public class FirstScreen extends ScreenAdapter {
         gridRenderer = new GridRenderer(gridManager);
         playerRenderer = new PlayerRenderer();
 
-        //this.assetService.load(MapAssets.MAIN);
-        //this.mapRenderer.setMap(this.assetService.get(MapAssets.MAIN));
+        this.mapRenderer = new OrthogonalTiledMapRenderer(assetService.load(MapAssets.MAIN), Main.UNIT_SCALE, this.batch);
     }
 
     @Override
@@ -77,17 +75,16 @@ public class FirstScreen extends ScreenAdapter {
         //clear screen
         ScreenUtils.clear(Color.BLACK);
 
+        this.viewport.apply();
+        this.batch.setColor(Color.WHITE);
+        this.mapRenderer.setView(this.camera);
+        this.mapRenderer.render();
+
         //render grid
         gridRenderer.render(camera.combined);
 
         //render player
         playerRenderer.render(player, camera.combined);
-
-
-//        this.viewport.apply();
-//        this.batch.setColor(Color.WHITE);
-//        this.mapRenderer.setView(this.camera);
-//        this.mapRenderer.render();
     }
 
     //ends current turn and resets player stamina
@@ -110,6 +107,6 @@ public class FirstScreen extends ScreenAdapter {
     public void dispose() {
         gridRenderer.dispose();
         playerRenderer.dispose();
-        //this.mapRenderer.dispose();
+        mapRenderer.dispose();
     }
 }

@@ -12,7 +12,7 @@ public class AssetService implements Disposable {
 
     public AssetService(FileHandleResolver fileHandleResolver) {
         this.assetManager = new AssetManager(fileHandleResolver);
-        this.assetManager.setLoader(TiledMap.class, new TmxMapLoader());
+        this.assetManager.setLoader(TiledMap.class, new TmxMapLoader(fileHandleResolver));
     }
 
     public <T> T load(Asset<T> asset){

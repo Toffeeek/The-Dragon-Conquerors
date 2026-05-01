@@ -12,7 +12,6 @@ public class GridRenderer implements Disposable {
 
     // Tile colors
     private static final Color COLOR_BASE = new Color(0.15f, 0.15f, 0.15f, 1f);
-    private static final Color COLOR_WALL = new Color(0.05f, 0.05f, 0.05f, 1f);
     private static final Color COLOR_REACHABLE = new Color(0.2f,  0.5f,  0.9f,  0.45f);
     private static final Color COLOR_PATH = new Color(0.1f,  0.9f,  0.9f,  0.6f);
     private static final Color COLOR_SELECTED = new Color(1f,    0.85f, 0.1f,  0.7f);
@@ -31,8 +30,11 @@ public class GridRenderer implements Disposable {
         for(int x=0; x<gridManager.getCols(); x++){
             for(int y=0; y<gridManager.getRows(); y++){
                 Tile tile = gridManager.getTile(x, y);
-                shapeRenderer.setColor(getTileColor(tile));
-                shapeRenderer.rect(tile.getWorldX(), tile.getWorldY(), tileSize, tileSize);
+                Color tileColor = getTileColor(tile);
+                if(tileColor != null){
+                    shapeRenderer.setColor(tileColor);
+                    shapeRenderer.rect(tile.getWorldX(), tile.getWorldY(), tileSize, tileSize);
+                }
             }
         }
         shapeRenderer.end();
@@ -49,13 +51,11 @@ public class GridRenderer implements Disposable {
     }
 
     private Color getTileColor(Tile tile){
-        if(!tile.isWalkable())  return COLOR_WALL;
-
         return switch (tile.getHighlightState()){
             case REACHABLE -> COLOR_REACHABLE;
             case PATH -> COLOR_PATH;
             case SELECTED -> COLOR_SELECTED;
-            default -> COLOR_BASE;
+            default -> null;
         };
     }
 
