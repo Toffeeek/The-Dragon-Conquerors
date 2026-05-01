@@ -1,4 +1,4 @@
-package com.server.server.model;
+package com.shared.shared.model;
 
 public enum Action
 {

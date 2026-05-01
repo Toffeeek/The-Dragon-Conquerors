@@ -16,6 +16,10 @@ allprojects {
   apply plugin: 'eclipse'
   apply plugin: 'idea'
 
+  if (!tasks.names.contains('prepareKotlinBuildScriptModel')) {
+    tasks.register('prepareKotlinBuildScriptModel')
+  }
+
   // This allows you to "Build and run using IntelliJ IDEA", an option in IDEA's Settings.
   idea {
     module {
@@ -23,6 +27,10 @@ allprojects {
       testOutputDir = file('build/classes/java/test')
     }
   }
+}
+
+tasks.register('classes') {
+  dependsOn subprojects.collect { it.tasks.matching { task -> task.name == 'classes' } }
 }
 
 configure(subprojects) {

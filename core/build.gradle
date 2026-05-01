@@ -2,6 +2,10 @@
 eclipse.project.name = appName + '-core'
 
 dependencies {
+  implementation project(':shared')
+  implementation project(':client')
+  compileOnly 'org.projectlombok:lombok:1.18.46'
+  annotationProcessor 'org.projectlombok:lombok:1.18.46'
   api "com.badlogicgames.ashley:ashley:$ashleyVersion"
   api "com.badlogicgames.gdx:gdx-ai:$aiVersion"
   api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"

@@ -3,8 +3,8 @@ package com.server.server.config;
 
 
 
-import com.server.server.model.Action;
-import com.server.server.model.Packet;
+import com.shared.shared.model.Action;
+import com.shared.shared.model.Packet;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;

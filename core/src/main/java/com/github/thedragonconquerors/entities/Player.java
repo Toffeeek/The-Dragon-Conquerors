@@ -3,11 +3,17 @@ package com.github.thedragonconquerors.entities;
 import com.badlogic.gdx.math.Vector2;
 import com.github.thedragonconquerors.core.GridManager;
 import com.github.thedragonconquerors.core.Tile;
+import lombok.Getter;
 
 import java.util.ArrayList;
 import java.util.List;
 
+@Getter
 public class Player {
+
+    private final int ID;
+    private final String username;
+
     private int gridX;
     private int gridY;
 
@@ -23,13 +29,18 @@ public class Player {
     private int pathIndex = 0;
     private static final float MOVE_SPEED = 5f;
 
-    public Player(int startGridX, int startGridY, int maxStamina){
+    public Player(int ID, String username, int startGridX, int startGridY, int maxStamina)
+    {
+        this.ID = ID;
+        this.username = username;
         this.gridX = startGridX;
         this.gridY = startGridY;
         this.maxStamina = maxStamina;
         this.remainingStamina = maxStamina;
 
         float worldSize = GridManager.TILE_WORLD_SIZE;
+
+
 
         worldPos.set(startGridX*worldSize + worldSize/2f,   //center the player on the starting tile
                      startGridY*worldSize + worldSize/2f);
@@ -43,7 +54,8 @@ public class Player {
         float step = MOVE_SPEED*delta;
         float dist = worldPos.dst(targetWorldPos);
 
-        if(dist<=step){
+        if(dist<=step)
+        {
             worldPos.set(targetWorldPos);
             pathIndex++;
 
@@ -53,7 +65,8 @@ public class Player {
             }
             else    setTargetToTile(movementPath.get(pathIndex));   //if not reached then advance to next tile
         }
-        else{
+        else
+        {
             float ratio = step/dist;
             worldPos.lerp(targetWorldPos, ratio);
         }
@@ -75,7 +88,7 @@ public class Player {
     }
 
     //turn manager
-    public void resetStamin(){  //resets stamina at the start of each turn
+    public void resetStamina(){  //resets stamina at the start of each turn
         remainingStamina = maxStamina;
     }
 
@@ -83,30 +96,6 @@ public class Player {
         remainingStamina = Math.max(0, remainingStamina-cost);
     }
 
-    //getters
-    public int getGridX() {
-        return gridX;
-    }
-
-    public int getGridY() {
-        return gridY;
-    }
-
-    public Vector2 getWorldPos() {
-        return worldPos;
-    }
-
-    public int getMaxStamina() {
-        return maxStamina;
-    }
-
-    public int getRemainingStamina() {
-        return remainingStamina;
-    }
-
-    public boolean isMoving() {
-        return isMoving;
-    }
 
     public void setGridPosition(int x, int y){
         this.gridX = x;

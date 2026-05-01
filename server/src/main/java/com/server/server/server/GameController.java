@@ -2,9 +2,9 @@ package com.server.server.server;
 
 
 
-import com.server.server.model.Action;
-import com.server.server.model.Packet;
-import com.server.server.model.Pair;
+import com.shared.shared.model.Action;
+import com.shared.shared.model.Packet;
+import com.shared.shared.model.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.handler.annotation.MessageMapping;

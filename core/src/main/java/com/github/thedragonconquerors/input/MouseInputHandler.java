@@ -11,6 +11,7 @@ import com.github.thedragonconquerors.core.Tile;
 import com.github.thedragonconquerors.entities.Player;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 public class MouseInputHandler extends InputAdapter{
     private final OrthographicCamera camera;
@@ -18,15 +19,21 @@ public class MouseInputHandler extends InputAdapter{
     private final GridManager gridManager;
     private final MovementSystem movementSystem;
     private final Player player;
+    private final Consumer<Tile> moveHandler;
     private final Vector3 screenToWorld = new Vector3(); //reusable vector to avoid allocation of each frame
     private boolean isLocalPlayerTurn = true;   //is currently the local player turn or not
 
     public MouseInputHandler(OrthographicCamera camera, Viewport viewport, GridManager gridManager, MovementSystem movementSystem, Player player){
+        this(camera, viewport, gridManager, movementSystem, player, null);
+    }
+
+    public MouseInputHandler(OrthographicCamera camera, Viewport viewport, GridManager gridManager, MovementSystem movementSystem, Player player, Consumer<Tile> moveHandler){
         this.camera = camera;
         this.viewport = viewport;
         this.gridManager = gridManager;
         this.movementSystem = movementSystem;
         this.player = player;
+        this.moveHandler = moveHandler;
     }
 
     //mouse hover to show the reachable tile
@@ -58,6 +65,10 @@ public class MouseInputHandler extends InputAdapter{
 
         if(!path.isEmpty() && path.get(path.size()-1) == clicked && movementSystem.getReachableTiles().contains(clicked)){
             movementSystem.movePlayer(player, path);
+            if(moveHandler != null)
+            {
+                moveHandler.accept(clicked);
+            }
         }
 
         return true;
