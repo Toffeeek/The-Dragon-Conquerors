@@ -82,9 +82,8 @@ public class GameOneScreen extends ScreenAdapter
         gridManager = new GridManager();
         movementSystem = new MovementSystem(gridManager);
 
-        // Spawn player at tile(4, 2)
-        Scanner scanner = new Scanner(System.in);
 
+        Scanner scanner = new Scanner(System.in);
         while(true)
         {
             System.out.println("1. Blue \n2. Red");
@@ -107,6 +106,8 @@ public class GameOneScreen extends ScreenAdapter
                 break;
             }
         }
+
+
 
         //compute initial reachable tiles
         movementSystem.computeReachableTiles(localPlayer);
@@ -228,28 +229,29 @@ public class GameOneScreen extends ScreenAdapter
 
     private void moveEnemyPlayer(Packet packet)
     {
-        Player player = playersById.get(packet.getID());
-        Pair<Integer, Integer> position = packet.getFinalPosition();
-        if(player == null || position == null)
+        Player enemyPlayer = playersById.get(packet.getID());
+        Pair<Integer, Integer> finalPosition = packet.getFinalPosition();
+        if(enemyPlayer == null || finalPosition == null)
         {
             return;
         }
 
-        setTileOccupied(player.getGridX(), player.getGridY(), false);
+        setTileOccupied(enemyPlayer.getGridX(), enemyPlayer.getGridY(), false);
 
-        List<Tile> path = buildStraightPath(
-                player.getGridX(),
-                player.getGridY(),
-                position.first,
-                position.second
+        MovementSystem enemyMovementSystem = new MovementSystem(this.gridManager);
+
+
+        List<Tile> path = enemyMovementSystem.computePath(
+            enemyPlayer,
+            gridManager.getTile(finalPosition.first, finalPosition.second)
         );
 
-        player.setGridPosition(position.first, position.second);
-        setTileOccupied(position.first, position.second, true);
+        enemyPlayer.setGridPosition(finalPosition.first, finalPosition.second);
+        setTileOccupied(finalPosition.first, finalPosition.second, true);
 
         if(!path.isEmpty())
         {
-            player.startMovementAnimation(path);
+            enemyPlayer.startMovementAnimation(path);
         }
     }
 

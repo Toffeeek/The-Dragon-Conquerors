@@ -1,5 +1,10 @@
 package com.github.thedragonconquerors.core;
 
+import lombok.Setter;
+import lombok.Getter;
+
+@Getter
+@Setter
 public class Tile {
     public enum HighlightState{
         NONE,       //normal tile
@@ -12,6 +17,7 @@ public class Tile {
     private final int gridY;
     private final float worldX;
     private final float worldY;
+
 
     private boolean walkable;
     private int movementCost;
@@ -27,57 +33,6 @@ public class Tile {
         this.movementCost =1;
         this.occupied = false;
         this.highlightState = HighlightState.NONE;
-    }
-
-    //getters
-    public int getGridX() {
-        return gridX;
-    }
-
-    public int getGridY() {
-        return gridY;
-    }
-
-    public float getWorldX() {
-        return worldX;
-    }
-
-    public float getWorldY() {
-        return worldY;
-    }
-
-    public boolean isWalkable() {
-        return walkable;
-    }
-
-    public int getMovementCost() {
-        return movementCost;
-    }
-
-    public boolean isOccupied() {
-        return occupied;
-    }
-
-    public HighlightState getHighlightState() {
-        return highlightState;
-    }
-
-    //setters
-
-    public void setWalkable(boolean walkable) {
-        this.walkable = walkable;
-    }
-
-    public void setMovementCost(int movementCost) {
-        this.movementCost = movementCost;
-    }
-
-    public void setOccupied(boolean occupied) {
-        this.occupied = occupied;
-    }
-
-    public void setHighlightState(HighlightState highlightState) {
-        this.highlightState = highlightState;
     }
 
     public boolean isPassable(){
