@@ -273,35 +273,6 @@ public class GameOneScreen extends ScreenAdapter
         networkClient.send(packet);
     }
 
-    private List<Tile> buildStraightPath(int startX, int startY, int targetX, int targetY)
-    {
-        List<Tile> path = new ArrayList<>();
-        int x = startX;
-        int y = startY;
-
-        while(x != targetX)
-        {
-            x += Integer.compare(targetX, x);
-            Tile tile = gridManager.getTile(x, y);
-            if(tile != null)
-            {
-                path.add(tile);
-            }
-        }
-
-        while(y != targetY)
-        {
-            y += Integer.compare(targetY, y);
-            Tile tile = gridManager.getTile(x, y);
-            if(tile != null)
-            {
-                path.add(tile);
-            }
-        }
-
-        return path;
-    }
-
     private void setTileOccupied(int x, int y, boolean occupied)
     {
         Tile tile = gridManager.getTile(x, y);
@@ -345,13 +316,15 @@ public class GameOneScreen extends ScreenAdapter
     }
 
     //ends current turn and resets player stamina
-    private void endTurn(){
+    private void endTurn()
+    {
         localPlayer.resetStamina();
         movementSystem.computeReachableTiles(localPlayer);
     }
 
     @Override
-    public void resize(int width, int height){
+    public void resize(int width, int height)
+    {
         viewport.update(width, height, true);
     }
 

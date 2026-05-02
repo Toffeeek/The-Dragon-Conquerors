@@ -1,11 +1,20 @@
 {
-    "activeFile": "",
+    "activeFile": "canyon.tmx",
     "expandedProjectPaths": [
+        "."
     ],
     "fileStates": {
         "Cliff_Tile_brown.tsx": {
             "dynamicWrapping": true,
             "scaleInDock": 1
+        },
+        "canyon.tmx": {
+            "scale": 3,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 157.66666666666669,
+                "y": 99.33333333333331
+            }
         },
         "cliff-brown.tsx": {
             "dynamicWrapping": false,
@@ -27,19 +36,28 @@
         "tilset.tsx": {
             "scaleInDock": 1,
             "scaleInEditor": 8
+        },
+        "wizard final og.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
         }
     },
-    "last.imagePath": "/home/tawfiq/TDC/assets/maps",
-    "map.height": 12,
+    "frame.defaultDuration": 200,
+    "last.imagePath": "/home/tawfiq/Downloads",
+    "map.height": 17,
     "map.lastUsedFormat": "tmx",
     "map.layerDataFormat": "3",
+    "map.orientation": "2",
     "map.tileHeight": 16,
     "map.tileWidth": 16,
-    "map.width": 20,
+    "map.width": 30,
     "openFiles": [
+        "canyon.tmx"
     ],
     "project": "map1.tiled-project",
     "recentFiles": [
+        "canyon.tmx",
+        "wizard final og.tsx",
         "cliff-brown.tsx",
         "tileset-dark.tsx",
         "cliff-dark.tsx",
@@ -50,7 +68,7 @@
     "tileset.margin": 0,
     "tileset.spacing": 0,
     "tileset.tileSize": {
-        "height": 16,
-        "width": 16
+        "height": 162,
+        "width": 162
     }
 }
