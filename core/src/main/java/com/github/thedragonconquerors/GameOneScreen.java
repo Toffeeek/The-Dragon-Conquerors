@@ -29,7 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 
-public class FirstScreen extends ScreenAdapter
+public class GameOneScreen extends ScreenAdapter
 {
     private final Main game;
     private final Batch batch;
@@ -52,10 +52,13 @@ public class FirstScreen extends ScreenAdapter
     private MouseInputHandler mouseInputHandler;
 
 
-    private NetworkClient networkClient;
-    private Packet latestPacketFromServer;
+    private final NetworkClient networkClient;
 
-    public FirstScreen(Main game)
+
+    /**
+     * Sets up the camera and the packet handler to communicate with the server
+     */
+    public GameOneScreen(Main game)
     {
         this.networkClient = game.getNetworkClient();
         this.game = game;
@@ -67,6 +70,11 @@ public class FirstScreen extends ScreenAdapter
         this.enemyPlayer = new ArrayList<>();
     }
 
+    /**
+     * Automatically called after the constructor, use this function to set up the starting positions /
+     * configurations of the game before launching the actual screen. Currently this function takes
+     * terminal input to figure out the starting positions of players.
+     */
     @Override
     public void show()
     {
@@ -76,12 +84,29 @@ public class FirstScreen extends ScreenAdapter
 
         // Spawn player at tile(4, 2)
         Scanner scanner = new Scanner(System.in);
-        System.out.print("Select starting coordinate x y: ");
-        int x = scanner.nextInt();
-        int y = scanner.nextInt();
-        spawnLocalPlayer(x, y);
 
-//        spawnLocalPlayer(4 ,2);
+        while(true)
+        {
+            System.out.println("1. Blue \n2. Red");
+            System.out.print("Select team: ");
+            int teamIdx = scanner.nextInt();
+            switch (teamIdx)
+            {
+                case 1:
+                    spawnLocalPlayer(9,0);
+                    break;
+                case 2:
+                    spawnLocalPlayer(9,11);
+                    break;
+                default:
+                    System.out.println("Invalid team idx");
+                    break;
+            }
+            if(teamIdx == 1 || teamIdx == 2)
+            {
+                break;
+            }
+        }
 
         //compute initial reachable tiles
         movementSystem.computeReachableTiles(localPlayer);
@@ -97,6 +122,9 @@ public class FirstScreen extends ScreenAdapter
         this.mapRenderer = new OrthogonalTiledMapRenderer(assetService.load(MapAssets.MAIN), Main.UNIT_SCALE, this.batch);
     }
 
+    /**
+     * Manually called at the start of the game to add the local player at the map
+     */
     private void spawnLocalPlayer(int x, int y)
     {
         receivingInitialPlayerList = true;
@@ -106,6 +134,10 @@ public class FirstScreen extends ScreenAdapter
         gridManager.getTile(x, y).setOccupied(true);
     }
 
+    /**
+     * LibGDX automatically calls this function repeatedly to render the current state of the screen.
+     * @param delta The time in seconds since the last render.
+     */
     @Override
     public void render(float delta){
         //update player animation
@@ -138,10 +170,13 @@ public class FirstScreen extends ScreenAdapter
         }
     }
 
+    /**
+     * VERY IMPORTANT: This function is automatically called by the application whenever a packet
+     * arrives from the server. The packet from the server is arrived in the form of the function parameter.
+     * Handle the packet from the server based on the 'action' field of the packet.
+     */
     private void handlePacket(Packet packet)
     {
-        latestPacketFromServer = packet;
-
         switch(packet.getAction())
         {
             case PRIVATE_JOIN_CONFIRMATION:

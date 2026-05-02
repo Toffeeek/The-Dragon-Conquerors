@@ -8,19 +8,19 @@ import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.GdxRuntimeException;
-import com.badlogic.gdx.utils.Null;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
 import com.shared.shared.model.Packet;
 import lombok.Getter;
-import lombok.Setter;
 
 import java.util.HashMap;
 import java.util.Map;
 
-/** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms. */
+/** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms.
+ *  The first class made after the application is launched. Acts as the entry point.
+ * */
 public class Main extends Game
 {
     public static final float WORLD_WIDTH = 20f;
@@ -37,10 +37,14 @@ public class Main extends Game
     private AssetService assetService;
     @Getter
     private NetworkClient networkClient;
-    private Packet latestPacketFromServer;
 
     private final Map<Class<? extends Screen>, Screen> screenCache = new HashMap<>();
 
+    /**
+     *  LibGDX automatically calls this function when Main() is called in the Lwjgl3Launcher.
+     *  This function calls FirstScreen which acts as the game screen. In the future, this will be the
+     *  lobby or character creation screen of the game instead of being taken directly to the game
+     */
     @Override
     public void create()
     {
@@ -52,10 +56,13 @@ public class Main extends Game
 
         setupNetworkClient();
 
-        addScreen(new FirstScreen(this));
-        setScreen(FirstScreen.class);
+        addScreen(new GameOneScreen(this));
+        setScreen(GameOneScreen.class);
     }
 
+    /**
+     * Sets up the means to communicate with the server via the networkClient object
+     */
     private void setupNetworkClient()
     {
         try
@@ -69,31 +76,14 @@ public class Main extends Game
         }
     }
 
-    private void exampleFunction()
-    {
-        Packet examplePacket = new Packet();
-        networkClient.send(examplePacket);
 
-        /*
-         * Receiving does not happen immediately here.
-         *
-         * networkClient.send(examplePacket) sends a packet to the server and returns right away.
-         * Later, when the server broadcasts/replies, NetworkClient receives that packet inside
-         * its STOMP subscription and calls Main.handlePacket(packet).
-         *
-         * So the received packet is accepted in handlePacket(...), not returned from send(...).
-         */
-        Packet alreadyReceivedPacket = latestPacketFromServer;
-        if(alreadyReceivedPacket != null)
-        {
-            System.out.println("Last packet received from server: " + alreadyReceivedPacket.getAction());
-        }
-    }
-
+    /**
+     * VERY IMPORTANT: This function is automatically called by the application whenever a packet
+     * arrives from the server. The packet from the server is arrived in the form of the function parameter.
+     * Handle the packet from the server based on the 'action' field of the packet.
+     */
     private void handlePacket(Packet packet)
     {
-        latestPacketFromServer = packet;
-
         switch(packet.getAction())
         {
             case PRIVATE_JOIN_CONFIRMATION:
