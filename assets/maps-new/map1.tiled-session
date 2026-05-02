@@ -7,8 +7,8 @@
             "scale": 2.0662499999999997,
             "selectedLayer": 0,
             "viewCenter": {
-                "x": 240.53236539624925,
-                "y": 135.99516031457958
+                "x": 241.01633393829403,
+                "y": 128.49364791288568
             }
         },
         "map1_alt.tmx": {
@@ -30,6 +30,7 @@
     ],
     "project": "map1.tiled-project",
     "recentFiles": [
+        "map1.tmx"
     ],
     "tileset.lastUsedFormat": "tsx",
     "tileset.tileSize": {

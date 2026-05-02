@@ -1,153 +1,285 @@
 package com.github.thedragonconquerors.core;
 
-import com.github.thedragonconquerors.assets.MapAssets;
-
 import java.util.ArrayList;
 import java.util.List;
 
 public class GridManager {  //manages the 2d grid of the environment
-    public static final int COLS = 20;
-    public static final int ROWS = 12;
+    public static final int COLS = 30;
+    public static final int ROWS = 17;
     public static final float TILE_WORLD_SIZE = 1f;
+
+    GameMap map;
 
     private final Tile[][] tiles;
 
-    public GridManager(){
+    public GridManager(GameMap map)
+    {
+        this.map = map;
         tiles = new Tile[COLS][ROWS];
         initGrid();
     }
 
-    private void initGrid(){    //builds the grid
+    // builds the grid
+    private void initGrid()
+    {
         for(int i=0; i<COLS; i++){
             for(int j=0; j<ROWS; j++)   tiles[i][j] = new Tile(i, j, TILE_WORLD_SIZE);
         }
 
-        setWalkable(0, 0, false);
-        setWalkable(1, 0, false);
-        setWalkable(2, 0, false);
-        setWalkable(3, 0, false);
-        setWalkable(4, 0, false);
-        setWalkable(15, 0, false);
-        setWalkable(16, 0, false);
-        setWalkable(17, 0, false);
-        setWalkable(18, 0, false);
-        setWalkable(19, 0, false);
-        setWalkable(0, 1, false);
-        setWalkable(1, 1, false);
-        setWalkable(2, 1, false);
-        setWalkable(3, 1, false);
-        setWalkable(11, 1, false);
-        setWalkable(12, 1, false);
-        setWalkable(15, 1, false);
-        setWalkable(16, 1, false);
-        setWalkable(17, 1, false);
-        setWalkable(18, 1, false);
-        setWalkable(19, 1, false);
-        setWalkable(0, 2, false);
-        setWalkable(1, 2, false);
-        setWalkable(2, 2, false);
-        setWalkable(5, 2, false);
-        setWalkable(6, 2, false);
-        setWalkable(7, 2, false);
-        setWalkable(8, 2, false);
-        setWalkable(11, 2, false);
-        setWalkable(12, 2, false);
-        setWalkable(18, 2, false);
-        setWalkable(19, 2, false);
-        setWalkable(0, 3, false);
-        setWalkable(5, 3, false);
-        setWalkable(6, 3, false);
-        setWalkable(7, 3, false);
-        setWalkable(8, 3, false);
-        setWalkable(13, 3, false);
-        setWalkable(14, 3, false);
-        setWalkable(15, 3, false);
-        setWalkable(16, 3, false);
-        setWalkable(18, 3, false);
-        setWalkable(19, 3, false);
-        setWalkable(0, 4, false);
-        setWalkable(5, 4, false);
-        setWalkable(6, 4, false);
-        setWalkable(7, 4, false);
-        setWalkable(8, 4, false);
-        setWalkable(12, 4, false);
-        setWalkable(13, 4, false);
-        setWalkable(14, 4, false);
-        setWalkable(15, 4, false);
-        setWalkable(16, 4, false);
-        setWalkable(19, 4, false);
-        setWalkable(0, 5, false);
-        setWalkable(1, 5, false);
-        setWalkable(2, 5, false);
-        setWalkable(3, 5, false);
-        setWalkable(5, 5, false);
-        setWalkable(6, 5, false);
-        setWalkable(7, 5, false);
-        setWalkable(8, 5, false);
-        setWalkable(12, 5, false);
-        setWalkable(13, 5, false);
-        setWalkable(14, 5, false);
-        setWalkable(15, 5, false);
-        setWalkable(16, 5, false);
-        setWalkable(19, 5, false);
-        setWalkable(0, 6, false);
-        setWalkable(1, 6, false);
-        setWalkable(2, 6, false);
-        setWalkable(3, 6, false);
-        setWalkable(6, 6, false);
-        setWalkable(7, 6, false);
-        setWalkable(8, 6, false);
-        setWalkable(11, 6, false);
-        setWalkable(12, 6, false);
-        setWalkable(13, 6, false);
-        setWalkable(14, 6, false);
-        setWalkable(15, 6, false);
-        setWalkable(16, 6, false);
-        setWalkable(19, 6, false);
-        setWalkable(0, 7, false);
-        setWalkable(1, 7, false);
-        setWalkable(2, 7, false);
-        setWalkable(7, 7, false);
-        setWalkable(10, 7, false);
-        setWalkable(11, 7, false);
-        setWalkable(14, 7, false);
-        setWalkable(15, 7, false);
-        setWalkable(16, 7, false);
-        setWalkable(19, 7, false);
-        setWalkable(0, 8, false);
-        setWalkable(1, 8, false);
-        setWalkable(4, 8, false);
-        setWalkable(5, 8, false);
-        setWalkable(6, 8, false);
-        setWalkable(7, 8, false);
-        setWalkable(19, 8, false);
-        setWalkable(0, 9, false);
-        setWalkable(1, 9, false);
-        setWalkable(11, 9, false);
-        setWalkable(12, 9, false);
-        setWalkable(13, 9, false);
-        setWalkable(14, 9, false);
-        setWalkable(19, 9, false);
-        setWalkable(0, 10, false);
-        setWalkable(1, 10, false);
-        setWalkable(2, 10, false);
-        setWalkable(3, 10, false);
-        setWalkable(4, 10, false);
-        setWalkable(11, 10, false);
-        setWalkable(12, 10, false);
-        setWalkable(13, 10, false);
-        setWalkable(14, 10, false);
-        setWalkable(17, 10, false);
-        setWalkable(18, 10, false);
-        setWalkable(19, 10, false);
-        setWalkable(0, 11, false);
-        setWalkable(1, 11, false);
-        setWalkable(2, 11, false);
-        setWalkable(3, 11, false);
-        setWalkable(4, 11, false);
-        setWalkable(17, 11, false);
-        setWalkable(18, 11, false);
-        setWalkable(19, 11, false);
+        if(map == GameMap.MAP1)
+        {
+
+            setWalkable(0, 0, false);
+            setWalkable(1, 0, false);
+            setWalkable(2, 0, false);
+            setWalkable(3, 0, false);
+            setWalkable(4, 0, false);
+            setWalkable(5, 0, false);
+            setWalkable(6, 0, false);
+            setWalkable(7, 0, false);
+            setWalkable(8, 0, false);
+            setWalkable(9, 0, false);
+            setWalkable(10, 0, false);
+            setWalkable(11, 0, false);
+            setWalkable(12, 0, false);
+            setWalkable(13, 0, false);
+            setWalkable(14, 0, false);
+            setWalkable(15, 0, false);
+            setWalkable(16, 0, false);
+            setWalkable(17, 0, false);
+            setWalkable(18, 0, false);
+            setWalkable(19, 0, false);
+            setWalkable(20, 0, false);
+            setWalkable(21, 0, false);
+            setWalkable(22, 0, false);
+            setWalkable(23, 0, false);
+            setWalkable(24, 0, false);
+            setWalkable(25, 0, false);
+            setWalkable(26, 0, false);
+            setWalkable(27, 0, false);
+            setWalkable(28, 0, false);
+            setWalkable(29, 0, false);
+
+            setWalkable(0, 1, false);
+            setWalkable(1, 1, false);
+            setWalkable(2, 1, false);
+            setWalkable(3, 1, false);
+            setWalkable(11, 1, false);
+            setWalkable(12, 1, false);
+            setWalkable(13, 1, false);
+            setWalkable(14, 1, false);
+            setWalkable(15, 1, false);
+            setWalkable(16, 1, false);
+            setWalkable(17, 1, false);
+            setWalkable(18, 1, false);
+            setWalkable(19, 1, false);
+            setWalkable(20, 1, false);
+            setWalkable(27, 1, false);
+            setWalkable(28, 1, false);
+            setWalkable(29, 1, false);
+
+            setWalkable(0, 2, false);
+            setWalkable(1, 2, false);
+            setWalkable(2, 2, false);
+            setWalkable(12, 2, false);
+            setWalkable(13, 2, false);
+            setWalkable(14, 2, false);
+            setWalkable(15, 2, false);
+            setWalkable(16, 2, false);
+            setWalkable(17, 2, false);
+            setWalkable(18, 2, false);
+            setWalkable(19, 2, false);
+            setWalkable(28, 2, false);
+            setWalkable(29, 2, false);
+
+            setWalkable(0, 3, false);
+            setWalkable(1, 3, false);
+            setWalkable(28, 3, false);
+            setWalkable(29, 3, false);
+
+            setWalkable(0, 4, false);
+            setWalkable(7, 4, false);
+            setWalkable(8, 4, false);
+            setWalkable(9, 4, false);
+            setWalkable(10, 4, false);
+            setWalkable(11, 4, false);
+            setWalkable(12, 4, false);
+            setWalkable(13, 4, false);
+            setWalkable(17, 4, false);
+            setWalkable(18, 4, false);
+            setWalkable(19, 4, false);
+            setWalkable(21, 4, false);
+            setWalkable(24, 4, false);
+            setWalkable(25, 4, false);
+            setWalkable(26, 4, false);
+            setWalkable(27, 4, false);
+            setWalkable(28, 4, false);
+
+            setWalkable(7, 5, false);
+            setWalkable(8, 5, false);
+            setWalkable(9, 5, false);
+            setWalkable(10, 5, false);
+            setWalkable(11, 5, false);
+            setWalkable(12, 5, false);
+            setWalkable(13, 5, false);
+            setWalkable(17, 5, false);
+            setWalkable(18, 5, false);
+            setWalkable(19, 5, false);
+            setWalkable(21, 5, false);
+            setWalkable(22, 5, false);
+
+            setWalkable(9, 6, false);
+            setWalkable(10, 6, false);
+            setWalkable(11, 6, false);
+            setWalkable(12, 6, false);
+            setWalkable(13, 6, false);
+            setWalkable(14, 6, false);
+            setWalkable(22, 6, false);
+
+            setWalkable(11, 7, false);
+            setWalkable(12, 7, false);
+            setWalkable(13, 7, false);
+            setWalkable(14, 7, false);
+            setWalkable(18, 7, false);
+            setWalkable(19, 7, false);
+            setWalkable(20, 7, false);
+            setWalkable(21, 7, false);
+            setWalkable(22, 7, false);
+            setWalkable(26, 7, false);
+            setWalkable(27, 7, false);
+
+
+            setWalkable(4, 8, false);
+            setWalkable(5, 8, false);
+            setWalkable(6, 8, false);
+            setWalkable(11, 8, false);
+            setWalkable(12, 8, false);
+            setWalkable(13, 8, false);
+            setWalkable(14, 8, false);
+            setWalkable(17, 8, false);
+            setWalkable(18, 8, false);
+            setWalkable(26, 8, false);
+            setWalkable(27, 8, false);
+
+            setWalkable(4, 9, false);
+            setWalkable(5, 9, false);
+            setWalkable(6, 9, false);
+            setWalkable(20, 9, false);
+            setWalkable(21, 9, false);
+            setWalkable(22, 9, false);
+            setWalkable(26, 9, false);
+            setWalkable(27, 9, false);
+
+            setWalkable(6, 10, false);
+            setWalkable(7, 10, false);
+            setWalkable(20, 10, false);
+            setWalkable(22, 10, false);
+            setWalkable(23, 10, false);
+            setWalkable(26, 10, false);
+            setWalkable(27, 10, false);
+
+            setWalkable(7, 11, false);
+            setWalkable(8, 11, false);
+            setWalkable(9, 11, false);
+            setWalkable(10, 11, false);
+            setWalkable(11, 11, false);
+            setWalkable(12, 11, false);
+            setWalkable(17, 11, false);
+            setWalkable(18, 11, false);
+            setWalkable(19, 11, false);
+            setWalkable(20, 11, false);
+
+            setWalkable(12, 12, false);
+            setWalkable(13, 12, false);
+            setWalkable(15, 12, false);
+            setWalkable(16, 12, false);
+            setWalkable(17, 12, false);
+
+            setWalkable(7, 13, false);
+            setWalkable(8, 13, false);
+            setWalkable(9, 13, false);
+            setWalkable(10, 13, false);
+            setWalkable(15, 13, false);
+            setWalkable(19, 13, false);
+            setWalkable(20, 13, false);
+            setWalkable(21, 13, false);
+            setWalkable(23, 13, false);
+            setWalkable(24, 13, false);
+            setWalkable(25, 13, false);
+            setWalkable(28, 13, false);
+            setWalkable(29, 13, false);
+
+            setWalkable(0, 14, false);
+            setWalkable(1, 14, false);
+            setWalkable(4, 14, false);
+            setWalkable(5, 14, false);
+            setWalkable(6, 14, false);
+            setWalkable(7, 14, false);
+            setWalkable(8, 14, false);
+            setWalkable(9, 14, false);
+            setWalkable(10, 14, false);
+            setWalkable(11, 14, false);
+            setWalkable(15, 14, false);
+            setWalkable(19, 14, false);
+            setWalkable(20, 14, false);
+            setWalkable(23, 14, false);
+            setWalkable(24, 14, false);
+            setWalkable(25, 14, false);
+            setWalkable(27, 14, false);
+            setWalkable(28, 14, false);
+            setWalkable(29, 14, false);
+
+            setWalkable(0, 15, false);
+            setWalkable(1, 15, false);
+            setWalkable(2, 15, false);
+            setWalkable(3, 15, false);
+            setWalkable(4, 15, false);
+            setWalkable(5, 15, false);
+            setWalkable(6, 15, false);
+            setWalkable(7, 15, false);
+            setWalkable(8, 15, false);
+            setWalkable(9, 15, false);
+            setWalkable(10, 15, false);
+            setWalkable(11, 15, false);
+            setWalkable(12, 15, false);
+            setWalkable(26, 15, false);
+            setWalkable(27, 15, false);
+            setWalkable(28, 15, false);
+            setWalkable(29, 15, false);
+
+            setWalkable(0, 16, false);
+            setWalkable(1, 16, false);
+            setWalkable(2, 16, false);
+            setWalkable(3, 16, false);
+            setWalkable(4, 16, false);
+            setWalkable(5, 16, false);
+            setWalkable(6, 16, false);
+            setWalkable(7, 16, false);
+            setWalkable(8, 16, false);
+            setWalkable(9, 16, false);
+            setWalkable(10, 16, false);
+            setWalkable(11, 16, false);
+            setWalkable(12, 16, false);
+            setWalkable(13, 16, false);
+            setWalkable(14, 16, false);
+            setWalkable(15, 16, false);
+            setWalkable(16, 16, false);
+            setWalkable(17, 16, false);
+            setWalkable(18, 16, false);
+            setWalkable(19, 16, false);
+            setWalkable(20, 16, false);
+            setWalkable(21, 16, false);
+            setWalkable(22, 16, false);
+            setWalkable(23, 16, false);
+            setWalkable(24, 16, false);
+            setWalkable(25, 16, false);
+            setWalkable(26, 16, false);
+            setWalkable(27, 16, false);
+            setWalkable(28, 16, false);
+            setWalkable(29, 16, false);
+
+        }
+
     }
 
     public void setWalkable(int x, int y, boolean walkable){

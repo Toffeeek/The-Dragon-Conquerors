@@ -12,6 +12,7 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
 import com.github.thedragonconquerors.assets.MapAssets;
+import com.github.thedragonconquerors.core.GameMap;
 import com.github.thedragonconquerors.core.GridManager;
 import com.github.thedragonconquerors.core.MovementSystem;
 import com.github.thedragonconquerors.core.Tile;
@@ -79,7 +80,7 @@ public class GameOneScreen extends ScreenAdapter
     public void show()
     {
         //build core system
-        gridManager = new GridManager();
+        gridManager = new GridManager(GameMap.MAP1);
         movementSystem = new MovementSystem(gridManager);
 
 
@@ -92,10 +93,10 @@ public class GameOneScreen extends ScreenAdapter
             switch (teamIdx)
             {
                 case 1:
-                    spawnLocalPlayer(9,0);
+                    spawnLocalPlayer(0,9);
                     break;
                 case 2:
-                    spawnLocalPlayer(9,11);
+                    spawnLocalPlayer(29,9);
                     break;
                 default:
                     System.out.println("Invalid team idx");

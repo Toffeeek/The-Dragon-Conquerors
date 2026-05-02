@@ -23,8 +23,8 @@ import java.util.Map;
  * */
 public class Main extends Game
 {
-    public static final float WORLD_WIDTH = 20f;
-    public static final float WORLD_HEIGHT = 12f;
+    public static final float WORLD_WIDTH = 30f;
+    public static final float WORLD_HEIGHT = 17f;
     public static final float UNIT_SCALE = 1f/16f;
 
     @Getter
