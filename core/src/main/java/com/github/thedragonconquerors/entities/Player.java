@@ -1,104 +1,65 @@
 package com.github.thedragonconquerors.entities;
 
 import com.badlogic.gdx.math.Vector2;
-import com.github.thedragonconquerors.core.GridManager;
-import com.github.thedragonconquerors.core.Tile;
+import com.github.thedragonconquerors.movement.MovementController;
+import com.github.thedragonconquerors.stats.StatCalculator;
+import com.github.thedragonconquerors.stats.StatComponent;
 import lombok.Getter;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@Getter
 public class Player {
-
+    //server side
     private final int ID;
     private final String username;
 
-    private int gridX;
-    private int gridY;
+    private final Vector2 position; //world-space position
+    private final float speed;  //movement speed in world units per second
 
-    private final Vector2 worldPos = new Vector2();
-    private final Vector2 targetWorldPos = new Vector2();
+    private final StatComponent stats;
+    private final MovementController movementController;
 
-    private final int maxStamina;
-    private int remainingStamina;
-
-    //animation state
-    private boolean isMoving = false;
-    private List<Tile> movementPath = new ArrayList<>();
-    private int pathIndex = 0;
-    private static final float MOVE_SPEED = 5f;
-
-    public Player(int ID, String username, int startGridX, int startGridY, int maxStamina)
+    public Player(int ID, String username, float startX, float startY, StatComponent stats)
     {
         this.ID = ID;
         this.username = username;
-        this.gridX = startGridX;
-        this.gridY = startGridY;
-        this.maxStamina = maxStamina;
-        this.remainingStamina = maxStamina;
 
-        float worldSize = GridManager.TILE_WORLD_SIZE;
+        this.stats = stats;
+        this.position = new Vector2(startX, startY);
+        this.speed = 5f;
 
-
-
-        worldPos.set(startGridX*worldSize + worldSize/2f,   //center the player on the starting tile
-                     startGridY*worldSize + worldSize/2f);
-        targetWorldPos.set(worldPos);
+        //max movement distance per turn derived from speed stat
+        float maxDistance = StatCalculator.deriveMaxMovementDistance(stats);
+        this.movementController = new MovementController(maxDistance);
     }
 
-    //animation: step through path tile by tile
-    public void update(float delta){    //called each frame. moves world position to the next tile in the path. when it arrives, advances to the next tile
-        if(!isMoving)   return;
-
-        float step = MOVE_SPEED*delta;
-        float dist = worldPos.dst(targetWorldPos);
-
-        if(dist<=step)
-        {
-            worldPos.set(targetWorldPos);
-            pathIndex++;
-
-            if(pathIndex>=movementPath.size()){
-                isMoving = false;   //reached the destination
-                movementPath.clear();
-            }
-            else    setTargetToTile(movementPath.get(pathIndex));   //if not reached then advance to next tile
-        }
-        else
-        {
-            float ratio = step/dist;
-            worldPos.lerp(targetWorldPos, ratio);
-        }
+    public Player(int ID, String username, float startX, float startY){
+        this(ID, username, startX, startY, StatComponent.defaultStats());
     }
 
-    //begins movement animation along given tile path
-    public void startMovementAnimation(List<Tile> path){
-        if(path.isEmpty())  return;
-
-        movementPath = new ArrayList<>(path);
-        pathIndex = 0;
-        isMoving = true;
-        setTargetToTile(path.get(0));
+    public void onTurnStart(){
+        movementController.resetForNewTurn();
+        stats.regenerateMana(StatCalculator.manaRegenPerTurn(stats));
     }
 
-    private void setTargetToTile(Tile tile){
-        float ws = GridManager.TILE_WORLD_SIZE;
-        targetWorldPos.set(tile.getWorldX() + ws/2f, tile.getWorldY() + ws/2f);
+    public void setPosition(float x, float y){
+        position.set(x, y);
     }
 
-    //turn manager
-    public void resetStamina(){  //resets stamina at the start of each turn
-        remainingStamina = maxStamina;
+    public Vector2 getPosition() {
+        return position;
     }
 
-    public void deductStamina(int cost){
-        remainingStamina = Math.max(0, remainingStamina-cost);
+    public float getSpeed() {
+        return speed;
     }
 
+    public StatComponent getStats() {
+        return stats;
+    }
 
-    public void setGridPosition(int x, int y){
-        this.gridX = x;
-        this.gridY = y;
+    public MovementController getMovementController() {
+        return movementController;
     }
 }

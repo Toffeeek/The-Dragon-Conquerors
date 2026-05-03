@@ -6,29 +6,26 @@ import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.Batch;
+import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
-import com.github.thedragonconquerors.assets.MapAssets;
-import com.github.thedragonconquerors.core.GameMap;
-import com.github.thedragonconquerors.core.GridManager;
-import com.github.thedragonconquerors.core.MovementSystem;
-import com.github.thedragonconquerors.core.Tile;
 import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.input.MouseInputHandler;
-import com.github.thedragonconquerors.rendering.GridRenderer;
+import com.github.thedragonconquerors.movement.MovementSystem;
+import com.github.thedragonconquerors.movement.NavGrid;
+import com.github.thedragonconquerors.rendering.HudRenderer;
 import com.github.thedragonconquerors.rendering.PlayerRenderer;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.Packet;
 import com.shared.shared.model.Pair;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Scanner;
+import java.util.*;
+
+import static com.github.thedragonconquerors.assets.MapAssets.MAIN;
 
 public class GameOneScreen extends ScreenAdapter
 {
@@ -39,22 +36,19 @@ public class GameOneScreen extends ScreenAdapter
     private final OrthographicCamera camera;
     private OrthogonalTiledMapRenderer mapRenderer;
     private MovementSystem movementSystem;
+    private NavGrid navGrid;
 
     private Player localPlayer;
-    private ArrayList<Player> enemyPlayer;
+    private ArrayList<Player> enemyPlayer = new ArrayList<>();
     private final Map<Integer, Player> playersById = new HashMap<>();
     private int localPlayerId = -1;
     private boolean receivingInitialPlayerList = false;
 
-
     private PlayerRenderer playerRenderer;
-    private GridManager gridManager;
-    private GridRenderer gridRenderer;
     private MouseInputHandler mouseInputHandler;
-
+    private HudRenderer hudRenderer;
 
     private final NetworkClient networkClient;
-
 
     /**
      * Sets up the camera and the packet handler to communicate with the server
@@ -80,9 +74,7 @@ public class GameOneScreen extends ScreenAdapter
     public void show()
     {
         //build core system
-        gridManager = new GridManager(GameMap.MAP1);
-        movementSystem = new MovementSystem(gridManager);
-
+        movementSystem = new MovementSystem();
 
         Scanner scanner = new Scanner(System.in);
         while(true)
@@ -93,10 +85,10 @@ public class GameOneScreen extends ScreenAdapter
             switch (teamIdx)
             {
                 case 1:
-                    spawnLocalPlayer(0,9);
+                    spawnLocalPlayer(localPlayerId, "Name", 0,9);
                     break;
                 case 2:
-                    spawnLocalPlayer(29,9);
+                    spawnLocalPlayer(localPlayerId, "Name", 29,9);
                     break;
                 default:
                     System.out.println("Invalid team idx");
@@ -108,32 +100,31 @@ public class GameOneScreen extends ScreenAdapter
             }
         }
 
-
-
-        //compute initial reachable tiles
-        movementSystem.computeReachableTiles(localPlayer);
-
-        //wire input
-        mouseInputHandler = new MouseInputHandler(camera, viewport, gridManager, movementSystem, localPlayer, this::sendLocalMove);
+        //wire input = click anywhere to set target
+        mouseInputHandler = new MouseInputHandler(camera, viewport, localPlayer, movementSystem, this::sendLocalMove);
         Gdx.input.setInputProcessor(mouseInputHandler);
 
-        //build renderers
-        gridRenderer = new GridRenderer(gridManager);
         playerRenderer = new PlayerRenderer();
+        hudRenderer = new HudRenderer(viewport);
 
-        this.mapRenderer = new OrthogonalTiledMapRenderer(assetService.load(MapAssets.MAIN), Main.UNIT_SCALE, this.batch);
+        TiledMap map = assetService.load(MAIN);
+        mapRenderer = new OrthogonalTiledMapRenderer(map, Main.UNIT_SCALE, batch);
+        navGrid = new NavGrid(map, Main.UNIT_SCALE, Main.WORLD_WIDTH, Main.WORLD_HEIGHT);
+        movementSystem.setNavGrid(navGrid);
     }
 
     /**
      * Manually called at the start of the game to add the local player at the map
      */
-    private void spawnLocalPlayer(int x, int y)
-    {
+    private void spawnLocalPlayer(int localPlayerId, String username, float worldX, float worldY) {
         receivingInitialPlayerList = true;
-        networkClient.join("local-player", x, y);
 
-        localPlayer = new Player(localPlayerId, "local-player", x, y, 5);
-        gridManager.getTile(x, y).setOccupied(true);
+        //convert world position to tile coordinates
+        int tileX = (int)worldX;
+        int tileY = (int)worldY;
+        networkClient.join("local-player", tileX, tileY);
+
+        localPlayer = new Player(-1, username, worldX, worldY);
     }
 
     /**
@@ -143,11 +134,11 @@ public class GameOneScreen extends ScreenAdapter
     @Override
     public void render(float delta){
         //update player animation
-        localPlayer.update(delta);
+        movementSystem.update(localPlayer, delta);
 
-        for(Player player : enemyPlayer)
+        for(Player enemy : enemyPlayer)
         {
-            player.update(delta);
+            movementSystem.update(enemy, delta);
         }
 
         //handle end turn key
@@ -156,20 +147,19 @@ public class GameOneScreen extends ScreenAdapter
         //clear screen
         ScreenUtils.clear(Color.BLACK);
 
-        this.viewport.apply();
-        this.batch.setColor(Color.WHITE);
-        this.mapRenderer.setView(this.camera);
-        this.mapRenderer.render();
-
-        //render grid
-        gridRenderer.render(camera.combined);
+        viewport.apply();
+        batch.setColor(Color.WHITE);
+        mapRenderer.setView(this.camera);
+        mapRenderer.render();
 
         //render player
-        playerRenderer.render(localPlayer, camera.combined);
+        playerRenderer.render(localPlayer, camera.combined, navGrid);
         for(Player player : enemyPlayer)
         {
             playerRenderer.render(player, camera.combined);
         }
+
+        hudRenderer.render(localPlayer, delta);
     }
 
     /**
@@ -201,12 +191,10 @@ public class GameOneScreen extends ScreenAdapter
                         packet.getID(),
                         packet.getUsername(),
                         position.first,
-                        position.second,
-                        5
+                        position.second
                     );
                     enemyPlayer.add(player);
                     playersById.put(packet.getID(), player);
-                    gridManager.getTile(position.first, position.second).setOccupied(true);
                     System.out.println("Enemy player " + packet.getID() + " joined");
                 }
                 else
@@ -222,6 +210,7 @@ public class GameOneScreen extends ScreenAdapter
                 break;
             case LEAVE:
                 System.out.println("Game packet received: " + packet.getAction());
+                removeEnemyPlayer(packet.getID());
                 break;
             default:
                 break;
@@ -237,26 +226,11 @@ public class GameOneScreen extends ScreenAdapter
             return;
         }
 
-        setTileOccupied(enemyPlayer.getGridX(), enemyPlayer.getGridY(), false);
-
-        MovementSystem enemyMovementSystem = new MovementSystem(this.gridManager);
-
-
-        List<Tile> path = enemyMovementSystem.computePath(
-            enemyPlayer,
-            gridManager.getTile(finalPosition.first, finalPosition.second)
-        );
-
-        enemyPlayer.setGridPosition(finalPosition.first, finalPosition.second);
-        setTileOccupied(finalPosition.first, finalPosition.second, true);
-
-        if(!path.isEmpty())
-        {
-            enemyPlayer.startMovementAnimation(path);
-        }
+        Vector2 destination = new Vector2(finalPosition.first, finalPosition.second);
+        enemyPlayer.getMovementController().setTarget(enemyPlayer.getPosition(), destination);
     }
 
-    private void sendLocalMove(Tile destination)
+    private void sendLocalMove(Vector2 targetPos)
     {
         if(localPlayerId < 0)
         {
@@ -267,60 +241,37 @@ public class GameOneScreen extends ScreenAdapter
         Packet packet = Packet.builder()
                 .ID(localPlayerId)
                 .username("local-player")
-                .finalPosition(new Pair<>(destination.getGridX(), destination.getGridY()))
+                .finalPosition(new Pair<>((int)targetPos.x, (int)targetPos.y))
                 .action(Action.MOVE)
                 .build();
 
         networkClient.send(packet);
     }
 
-    private void setTileOccupied(int x, int y, boolean occupied)
-    {
-        Tile tile = gridManager.getTile(x, y);
-        if(tile != null)
-        {
-            tile.setOccupied(occupied);
-            tile.setWalkable(!occupied);
-        }
-    }
-
     private void receiveExistingPlayer(Packet packet)
     {
         Pair<Integer, Integer> position = packet.getFinalPosition();
-        if(position == null)
-        {
-            return;
-        }
+        if(position == null)    return;
 
-        if(packet.getID() == localPlayerId || playersById.containsKey(packet.getID()))
-        {
-            return;
-        }
+        if(packet.getID() == localPlayerId || playersById.containsKey(packet.getID()))  return;
 
-        Player player = new Player
-        (
-                packet.getID(),
-                packet.getUsername(),
-                position.first,
-                position.second,
-                5
-        );
+        Player existing = new Player(packet.getID(), packet.getUsername(), position.first, position.second);
+        enemyPlayer.add(existing);
+        playersById.put(packet.getID(), existing);
 
-        enemyPlayer.add(player);
-        playersById.put(packet.getID(), player);
-        gridManager.getTile(position.first, position.second).setOccupied(true);
+        if(receivingInitialPlayerList)  System.out.println("Received existing player " + packet.getID() + " at " + position.first + ", " + position.second);
+    }
 
-        if(receivingInitialPlayerList)
-        {
-            System.out.println("Received existing player " + packet.getID() + " at " + position.first + ", " + position.second);
-        }
+    private void removeEnemyPlayer(int id){
+        Player enemy = playersById.remove(id);
+        if(enemy != null)   enemyPlayer.remove(enemy);
     }
 
     //ends current turn and resets player stamina
     private void endTurn()
     {
-        localPlayer.resetStamina();
-        movementSystem.computeReachableTiles(localPlayer);
+        localPlayer.onTurnStart();
+        System.out.println("Turn ended — movement distance reset.");
     }
 
     @Override
@@ -336,8 +287,8 @@ public class GameOneScreen extends ScreenAdapter
 
     @Override
     public void dispose() {
-        gridRenderer.dispose();
         playerRenderer.dispose();
         mapRenderer.dispose();
+        hudRenderer.dispose();
     }
 }
