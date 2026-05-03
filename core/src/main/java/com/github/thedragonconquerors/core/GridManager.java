@@ -133,7 +133,7 @@ public class GridManager {  //manages the 2d grid of the environment
             setWalkable(11, 6, false);
             setWalkable(12, 6, false);
             setWalkable(13, 6, false);
-            setWalkable(14, 6, false);
+
             setWalkable(22, 6, false);
 
             setWalkable(11, 7, false);

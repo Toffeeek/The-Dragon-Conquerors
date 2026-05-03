@@ -1,12 +1,15 @@
 package com.github.thedragonconquerors;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.loaders.resolvers.InternalFileHandleResolver;
+import com.badlogic.gdx.graphics.FPSLogger;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.profiling.GLProfiler;
 import com.badlogic.gdx.utils.GdxRuntimeException;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
@@ -38,6 +41,9 @@ public class Main extends Game
     @Getter
     private NetworkClient networkClient;
 
+    private GLProfiler glProfiler;
+    private FPSLogger fpsLogger;
+
     private final Map<Class<? extends Screen>, Screen> screenCache = new HashMap<>();
 
     /**
@@ -49,10 +55,14 @@ public class Main extends Game
     public void create()
     {
 
+        Gdx.app.setLogLevel(Application.LOG_DEBUG);
         this.batch = new SpriteBatch();
         this.camera = new OrthographicCamera();
         this.viewport = new FitViewport(WORLD_WIDTH, WORLD_HEIGHT, camera);
         this.assetService = new AssetService(new InternalFileHandleResolver());
+        this.glProfiler = new GLProfiler(Gdx.graphics);
+        this.glProfiler.enable();
+        this.fpsLogger = new FPSLogger();
 
         setupNetworkClient();
 
@@ -100,9 +110,6 @@ public class Main extends Game
         }
     }
 
-
-
-
     @Override
     public void resize(int width, int height){      //ensures that if the size of the window changes, it does no distort the overall rendering
         viewport.update(width, height, true);
@@ -119,6 +126,17 @@ public class Main extends Game
 
         super.setScreen(screen);
     }
+
+    @Override
+    public void render()
+    {
+        glProfiler.reset();
+        super.render();
+        Gdx.graphics.setTitle("TDC - Draw Calls: " + glProfiler.getDrawCalls());
+        fpsLogger.log();
+    }
+
+
 
     @Override
     public void dispose(){
