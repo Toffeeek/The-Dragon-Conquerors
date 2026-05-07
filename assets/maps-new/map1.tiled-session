@@ -13,20 +13,24 @@
             }
         },
         "map1_alt.tmx": {
-            "scale": 3,
+            "scale": 16,
             "selectedLayer": 0,
             "viewCenter": {
-                "x": 80.99999999999999,
-                "y": 135.66666666666669
+                "x": 86.3125,
+                "y": 130.875
             }
         },
         "tileset.tsx": {
             "scaleInDock": 1,
             "scaleInEditor": 3
+        },
+        "wizard_nigga-Picsart-BackgroundRemover.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
         }
     },
     "frame.defaultDuration": 150,
-    "last.imagePath": "/home/tawfiq/TDC/assets/maps-new",
+    "last.imagePath": "/home/tawfiq/The-Dragon-Conquerors/assets/maps-new",
     "map.height": 17,
     "map.lastUsedFormat": "tmx",
     "map.layerDataFormat": "3",
@@ -40,11 +44,12 @@
     "recentFiles": [
         "tileset.tsx",
         "map1_alt.tmx",
+        "wizard_nigga-Picsart-BackgroundRemover.tsx",
         "map1.tmx"
     ],
     "tileset.lastUsedFormat": "tsx",
     "tileset.tileSize": {
-        "height": 16,
-        "width": 16
+        "height": 162,
+        "width": 162
     }
 }
