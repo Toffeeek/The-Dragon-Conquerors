@@ -21,7 +21,6 @@ import com.github.thedragonconquerors.rendering.HudRenderer;
 import com.github.thedragonconquerors.rendering.PlayerRenderer;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.Packet;
-import com.shared.shared.model.Pair;
 
 import java.util.*;
 
@@ -39,7 +38,7 @@ public class GameOneScreen extends ScreenAdapter
     private NavGrid navGrid;
 
     private Player localPlayer;
-    private ArrayList<Player> enemyPlayer = new ArrayList<>();
+    private ArrayList<Player> enemyPlayers = new ArrayList<>();
     private final Map<Integer, Player> playersById = new HashMap<>();
     private int localPlayerId = -1;
     private boolean receivingInitialPlayerList = false;
@@ -62,7 +61,7 @@ public class GameOneScreen extends ScreenAdapter
         this.camera = game.getCamera();
         this.batch = game.getBatch();
         this.networkClient.setPacketHandler(packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
-        this.enemyPlayer = new ArrayList<>();
+        this.enemyPlayers = new ArrayList<>();
     }
 
     /**
@@ -116,14 +115,12 @@ public class GameOneScreen extends ScreenAdapter
     /**
      * Manually called at the start of the game to add the local player at the map
      */
-    private void spawnLocalPlayer(int localPlayerId, String username, float worldX, float worldY) {
+    private void spawnLocalPlayer(int localPlayerId, String username, float worldX, float worldY)
+    {
         receivingInitialPlayerList = true;
 
-        //convert world position to tile coordinates
-        int tileX = (int)worldX;
-        int tileY = (int)worldY;
-        networkClient.join("local-player", tileX, tileY);
-
+        Vector2 startingPosition = new Vector2(worldX, worldY);
+        networkClient.join("local-player", startingPosition);
         localPlayer = new Player(-1, username, worldX, worldY);
     }
 
@@ -136,7 +133,7 @@ public class GameOneScreen extends ScreenAdapter
         //update player animation
         movementSystem.update(localPlayer, delta);
 
-        for(Player enemy : enemyPlayer)
+        for(Player enemy : enemyPlayers)
         {
             movementSystem.update(enemy, delta);
         }
@@ -154,7 +151,7 @@ public class GameOneScreen extends ScreenAdapter
 
         //render player
         playerRenderer.render(localPlayer, camera.combined, navGrid);
-        for(Player player : enemyPlayer)
+        for(Player player : enemyPlayers)
         {
             playerRenderer.render(player, camera.combined);
         }
@@ -180,22 +177,22 @@ public class GameOneScreen extends ScreenAdapter
                 break;
             case EOF:
                 receivingInitialPlayerList = false;
-                System.out.println("Finished receiving existing players. Count: " + enemyPlayer.size());
+                System.out.println("Finished receiving existing players. Count: " + enemyPlayers.size());
                 break;
             case JOIN:
-                if(packet.getID() != localPlayerId)
+                if(packet.getID() != localPlayerId && !playersById.containsKey(packet.getID()))
                 {
-                    Pair<Integer, Integer> position = packet.getFinalPosition();
+                    Vector2 position = packet.getFinalPosition();
+                    if(position == null)    return;
                     Player player = new Player
                     (
                         packet.getID(),
                         packet.getUsername(),
-                        position.first,
-                        position.second
+                        new Vector2(position)
                     );
-                    enemyPlayer.add(player);
+                    enemyPlayers.add(player);
                     playersById.put(packet.getID(), player);
-                    System.out.println("Enemy player " + packet.getID() + " joined");
+                    System.out.println("Enemy player " + packet.getID() + " joined at " + packet.getFinalPosition());
                 }
                 else
                 {
@@ -220,14 +217,13 @@ public class GameOneScreen extends ScreenAdapter
     private void moveEnemyPlayer(Packet packet)
     {
         Player enemyPlayer = playersById.get(packet.getID());
-        Pair<Integer, Integer> finalPosition = packet.getFinalPosition();
-        if(enemyPlayer == null || finalPosition == null)
+        Vector2 destination = packet.getFinalPosition();
+        if(enemyPlayer == null || destination == null)
         {
             return;
         }
 
-        Vector2 destination = new Vector2(finalPosition.first, finalPosition.second);
-        enemyPlayer.getMovementController().setTarget(enemyPlayer.getPosition(), destination);
+        movementSystem.setNetworkDestination(enemyPlayer, new Vector2(destination));
     }
 
     private void sendLocalMove(Vector2 targetPos)
@@ -241,7 +237,7 @@ public class GameOneScreen extends ScreenAdapter
         Packet packet = Packet.builder()
                 .ID(localPlayerId)
                 .username("local-player")
-                .finalPosition(new Pair<>((int)targetPos.x, (int)targetPos.y))
+                .finalPosition(targetPos)
                 .action(Action.MOVE)
                 .build();
 
@@ -250,21 +246,22 @@ public class GameOneScreen extends ScreenAdapter
 
     private void receiveExistingPlayer(Packet packet)
     {
-        Pair<Integer, Integer> position = packet.getFinalPosition();
+        Vector2 position = packet.getFinalPosition();
         if(position == null)    return;
 
         if(packet.getID() == localPlayerId || playersById.containsKey(packet.getID()))  return;
 
-        Player existing = new Player(packet.getID(), packet.getUsername(), position.first, position.second);
-        enemyPlayer.add(existing);
-        playersById.put(packet.getID(), existing);
+        Player existingPlayer = new Player(packet.getID(), packet.getUsername(), new Vector2(position));
+        enemyPlayers.add(existingPlayer);
+        playersById.put(packet.getID(), existingPlayer);
 
-        if(receivingInitialPlayerList)  System.out.println("Received existing player " + packet.getID() + " at " + position.first + ", " + position.second);
+        if(receivingInitialPlayerList)  System.out.println("Received existingPlayer player " + packet.getID() + " at " + position.x + ", " + position.y);
     }
 
-    private void removeEnemyPlayer(int id){
+    private void removeEnemyPlayer(int id)
+    {
         Player enemy = playersById.remove(id);
-        if(enemy != null)   enemyPlayer.remove(enemy);
+        if(enemy != null)   enemyPlayers.remove(enemy);
     }
 
     //ends current turn and resets player stamina

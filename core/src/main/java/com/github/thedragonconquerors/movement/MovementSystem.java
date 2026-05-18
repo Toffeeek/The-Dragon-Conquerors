@@ -2,6 +2,8 @@ package com.github.thedragonconquerors.movement;
 
 import com.badlogic.gdx.math.Vector2;
 import com.github.thedragonconquerors.entities.Player;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,11 +15,14 @@ import java.util.List;
  * if remaining distance to target is less than one frame's step, we snap the player directly to the target instead of overshooting
  */
 
+@Setter
+@Getter
 public class MovementSystem {
     private static final float ARRIVAL_THRESHOLD = 0.05f;   //minimum distance to target before snapping
     private NavGrid navGrid;
 
-    public void setDestination(Player player, Vector2 clickedWorldPos) {
+    public void setDestination(Player player, Vector2 clickedWorldPos)
+    {
         if (navGrid == null) return;
 
         float remaining = player.getMovementController().getRemainingMovementDistance();
@@ -27,22 +32,37 @@ public class MovementSystem {
         if (path.isEmpty()) return;
 
         // Clamp path to remaining distance budget
-        List<Vector2> clampedPath = clampPathToDistance(
-            player.getPosition(), path, remaining);
+        List<Vector2> clampedPath = clampPathToDistance(player.getPosition(), path, remaining);
 
         player.getMovementController().setPath(clampedPath);
     }
 
-    private List<Vector2> clampPathToDistance(Vector2 start,
-                                              List<Vector2> path,
-                                              float maxDistance) {
+    public void setNetworkDestination(Player player, Vector2 destination)
+    {
+        if(navGrid == null)
+        {
+            player.getMovementController().setNetworkTarget(player.getPosition(), destination);
+            return;
+        }
+
+        List<Vector2> path = navGrid.findPath(player.getPosition(), destination, Float.MAX_VALUE);
+
+        if(path.isEmpty())  return;
+
+        player.getMovementController().setNetworkPath(player.getPosition(), path);
+    }
+
+    private List<Vector2> clampPathToDistance(Vector2 start, List<Vector2> path, float maxDistance)
+    {
         List<Vector2> clamped = new ArrayList<>();
         float distSoFar = 0f;
         Vector2 prev = start;
 
-        for (Vector2 waypoint : path) {
+        for (Vector2 waypoint : path)
+        {
             float segDist = prev.dst(waypoint);
-            if (distSoFar + segDist > maxDistance) {
+            if (distSoFar + segDist > maxDistance)
+            {
                 // Interpolate to exact limit
                 float remaining = maxDistance - distSoFar;
                 float t = remaining / segDist;
@@ -98,11 +118,4 @@ public class MovementSystem {
         controller.deductDistance(stepDistance);
     }
 
-    public void setNavGrid(NavGrid navGrid) {
-        this.navGrid = navGrid;
-    }
-
-    public NavGrid getNavGrid() {
-        return navGrid;
-    }
 }

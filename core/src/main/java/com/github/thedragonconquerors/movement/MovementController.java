@@ -72,7 +72,34 @@ public class MovementController {
         setPath(singleStep);
     }
 
-    public Vector2 getTargetPosition() {
+    public void setNetworkTarget(Vector2 currentPos, Vector2 target)
+    {
+        remainingMovementDistance = Math.max(remainingMovementDistance, currentPos.dst(target));
+        setTarget(currentPos, target);
+    }
+
+    public void setNetworkPath(Vector2 currentPos, List<Vector2> newPath)
+    {
+        remainingMovementDistance = Math.max(remainingMovementDistance, pathDistance(currentPos, newPath));
+        setPath(newPath);
+    }
+
+    private float pathDistance(Vector2 start, List<Vector2> newPath)
+    {
+        float distance = 0f;
+        Vector2 previous = start;
+
+        for(Vector2 waypoint : newPath)
+        {
+            distance += previous.dst(waypoint);
+            previous = waypoint;
+        }
+
+        return distance;
+    }
+
+    public Vector2 getTargetPosition()
+    {
         if (path.isEmpty()) return null;
         return path.get(path.size() - 1);
     }
