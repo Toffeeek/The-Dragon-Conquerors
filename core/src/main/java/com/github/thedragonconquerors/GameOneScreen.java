@@ -13,6 +13,8 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
+import com.github.thedragonconquerors.assets.SpriteAssets;
+import com.github.thedragonconquerors.entities.CharacterClass;
 import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.input.MouseInputHandler;
 import com.github.thedragonconquerors.movement.MovementSystem;
@@ -22,6 +24,9 @@ import com.github.thedragonconquerors.rendering.PlayerRenderer;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.Packet;
 
+import com.github.thedragonconquerors.combat.ActionResult;
+import com.github.thedragonconquerors.combat.ActionSystem;
+import com.github.thedragonconquerors.combat.ActionType;
 import java.util.*;
 
 import static com.github.thedragonconquerors.assets.MapAssets.MAIN;
@@ -49,6 +54,10 @@ public class GameOneScreen extends ScreenAdapter
 
     private final NetworkClient networkClient;
 
+    private ActionSystem actionSystem;
+    private ActionType[] availableActions;
+    private int selectedActionIndex = 0;
+
     /**
      * Sets up the camera and the packet handler to communicate with the server
      */
@@ -74,54 +83,75 @@ public class GameOneScreen extends ScreenAdapter
     {
         //build core system
         movementSystem = new MovementSystem();
+        actionSystem = new ActionSystem();
 
         Scanner scanner = new Scanner(System.in);
+
+        // ── step 1: pick team ─────────────────────────────────────
+        CharacterClass chosenClass = CharacterClass.WARRIOR;
         while(true)
         {
             System.out.println("1. Blue \n2. Red");
             System.out.print("Select team: ");
             int teamIdx = scanner.nextInt();
-            switch (teamIdx)
-            {
-                case 1:
-                    spawnLocalPlayer(localPlayerId, "Name", 0,9);
-                    break;
-                case 2:
-                    spawnLocalPlayer(localPlayerId, "Name", 29,9);
-                    break;
-                default:
-                    System.out.println("Invalid team idx");
-                    break;
-            }
             if(teamIdx == 1 || teamIdx == 2)
             {
+                // ── step 2: pick class ────────────────────────────
+                System.out.println("Select your class:");
+                CharacterClass[] classes = CharacterClass.values();
+                for (int i = 0; i < classes.length; i++) {
+                    System.out.println((i + 1) + ". " + classes[i].displayName);
+                }
+                System.out.print("Enter number: ");
+                int classIdx = scanner.nextInt() - 1;
+                if (classIdx >= 0 && classIdx < classes.length) {
+                    chosenClass = classes[classIdx];
+                }
+                System.out.println("Class selected: " + chosenClass.displayName);
+
+                float spawnX = (teamIdx == 1) ? 0 : 29;
+                spawnLocalPlayer(localPlayerId, "Name", spawnX, 9, chosenClass);
+                availableActions = ActionType.availableFor(chosenClass);
                 break;
             }
+            System.out.println("Invalid team, please enter 1 or 2.");
         }
 
         //wire input = click anywhere to set target
         mouseInputHandler = new MouseInputHandler(camera, viewport, localPlayer, movementSystem, this::sendLocalMove);
         Gdx.input.setInputProcessor(mouseInputHandler);
 
-        playerRenderer = new PlayerRenderer();
-        hudRenderer = new HudRenderer(viewport);
-
+        // Load map first (blocking), then sprites individually with graceful fallback
         TiledMap map = assetService.load(MAIN);
         mapRenderer = new OrthogonalTiledMapRenderer(map, Main.UNIT_SCALE, batch);
         navGrid = new NavGrid(map, Main.UNIT_SCALE, Main.WORLD_WIDTH, Main.WORLD_HEIGHT);
         movementSystem.setNavGrid(navGrid);
+
+        for (SpriteAssets sprite : SpriteAssets.values()) {
+            try {
+                assetService.load(sprite);
+            } catch (Exception e) {
+                System.out.println("Sprite not found, skipping: " + sprite.name() + " (" + e.getMessage() + ")");
+            }
+        }
+
+        playerRenderer = new PlayerRenderer(assetService);
+        hudRenderer = new HudRenderer(viewport);
     }
 
     /**
-     * Manually called at the start of the game to add the local player at the map
+     * Manually called at the start of the game to add the local player at the map.
+     * @param characterClass the class the player selected before joining
      */
-    private void spawnLocalPlayer(int localPlayerId, String username, float worldX, float worldY)
+    private void spawnLocalPlayer(int localPlayerId, String username,
+                                  float worldX, float worldY,
+                                  CharacterClass characterClass)
     {
         receivingInitialPlayerList = true;
 
         Vector2 startingPosition = new Vector2(worldX, worldY);
         networkClient.join("local-player", startingPosition);
-        localPlayer = new Player(-1, username, worldX, worldY);
+        localPlayer = new Player(-1, username, worldX, worldY, characterClass);
     }
 
     /**
@@ -140,6 +170,9 @@ public class GameOneScreen extends ScreenAdapter
 
         //handle end turn key
         if(Gdx.input.isKeyJustPressed(Input.Keys.E))    endTurn();
+
+        //handle action hotkeys 1-4
+        handleActionKeys();
 
         //clear screen
         ScreenUtils.clear(Color.BLACK);
@@ -262,6 +295,32 @@ public class GameOneScreen extends ScreenAdapter
     {
         Player enemy = playersById.remove(id);
         if(enemy != null)   enemyPlayers.remove(enemy);
+    }
+
+    private void handleActionKeys() {
+        if (availableActions == null) return;
+        int[] keys = {
+            com.badlogic.gdx.Input.Keys.NUM_1,
+            com.badlogic.gdx.Input.Keys.NUM_2,
+            com.badlogic.gdx.Input.Keys.NUM_3,
+            com.badlogic.gdx.Input.Keys.NUM_4
+        };
+        for (int i = 0; i < keys.length && i < availableActions.length; i++) {
+            if (Gdx.input.isKeyJustPressed(keys[i])) {
+                selectedActionIndex = i;
+                hudRenderer.setSelectedActionIndex(i);
+                executeSelectedAction();
+                return;
+            }
+        }
+    }
+
+    private void executeSelectedAction() {
+        if (availableActions == null || localPlayer == null) return;
+        ActionType action = availableActions[selectedActionIndex];
+        ActionResult result = actionSystem.execute(localPlayer, enemyPlayers, action);
+        hudRenderer.showFeedback(result);
+        System.out.println("[Action] " + result.message);
     }
 
     //ends current turn and resets player stamina
