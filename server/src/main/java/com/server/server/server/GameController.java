@@ -2,6 +2,7 @@ package com.server.server.server;
 
 
 
+import com.badlogic.gdx.math.Vector2;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.Packet;
 import com.shared.shared.model.Pair;
@@ -26,7 +27,7 @@ public class GameController
     private int currPlayerIndex = 0;
 
 
-    private Map<Integer, Pair<String, Pair<Integer, Integer>>> playerCoordinates = new HashMap<>();
+    private Map<Integer, Pair<String, Vector2>> playerCoordinates = new HashMap<>();
 
     @MessageMapping("/game.takeAction")
     @SendTo("/match/public")

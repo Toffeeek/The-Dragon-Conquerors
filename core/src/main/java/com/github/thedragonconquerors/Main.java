@@ -133,7 +133,7 @@ public class Main extends Game
         glProfiler.reset();
         super.render();
         Gdx.graphics.setTitle("TDC - Draw Calls: " + glProfiler.getDrawCalls());
-        fpsLogger.log();
+//        fpsLogger.log();
     }
 
 
