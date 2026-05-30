@@ -8,6 +8,9 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.movement.MovementSystem;
+import com.github.thedragonconquerors.rendering.HudRenderer;
+import com.github.thedragonconquerors.combat.ActionType;
+import com.github.thedragonconquerors.stats.StatComponent;
 
 import java.util.function.Consumer;
 
@@ -18,6 +21,9 @@ public class MouseInputHandler extends InputAdapter {
     private final MovementSystem movementSystem;
 
     private final Consumer<Vector2> onMoveCallBack;
+    private HudRenderer hudRenderer;
+    private ActionType[] availableActions;
+    private StatComponent stats;
 
     private final Vector3 unprojectScratch = new Vector3(); //reusable unproject vector
     private boolean isLocalPlayerTurn = true;
@@ -30,10 +36,21 @@ public class MouseInputHandler extends InputAdapter {
         this.onMoveCallBack = onMoveCallBack;
     }
 
+    public void setHudContext(HudRenderer hudRenderer, ActionType[] actions, StatComponent stats) {
+        this.hudRenderer      = hudRenderer;
+        this.availableActions = actions;
+        this.stats            = stats;
+    }
+
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
         if(!isLocalPlayerTurn)  return false;
         if(button != Input.Buttons.LEFT)    return false;
+
+        // let the HUD consume the click first (action panel, toggle button)
+        if (hudRenderer != null && availableActions != null && stats != null) {
+            if (hudRenderer.handleClick(screenX, screenY, availableActions, stats)) return true;
+        }
 
         //convert screen pixels to world coordinates
         unprojectScratch.set(screenX, screenY, 0);

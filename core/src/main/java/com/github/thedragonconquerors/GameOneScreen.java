@@ -56,7 +56,6 @@ public class GameOneScreen extends ScreenAdapter
 
     private ActionSystem actionSystem;
     private ActionType[] availableActions;
-    private int selectedActionIndex = 0;
 
     /**
      * Sets up the camera and the packet handler to communicate with the server
@@ -137,6 +136,12 @@ public class GameOneScreen extends ScreenAdapter
 
         playerRenderer = new PlayerRenderer(assetService);
         hudRenderer = new HudRenderer(viewport);
+
+        // wire action callback: index → execute action
+        hudRenderer.setOnActionSelected(this::executeAction);
+
+        // give MouseInputHandler access to HUD so it can forward clicks
+        mouseInputHandler.setHudContext(hudRenderer, availableActions, localPlayer.getStats());
     }
 
     /**
@@ -150,7 +155,7 @@ public class GameOneScreen extends ScreenAdapter
         receivingInitialPlayerList = true;
 
         Vector2 startingPosition = new Vector2(worldX, worldY);
-        networkClient.join("local-player", startingPosition);
+        networkClient.join("local-player", new Vector2(worldX, worldY));
         localPlayer = new Player(-1, username, worldX, worldY, characterClass);
     }
 
@@ -171,8 +176,8 @@ public class GameOneScreen extends ScreenAdapter
         //handle end turn key
         if(Gdx.input.isKeyJustPressed(Input.Keys.E))    endTurn();
 
-        //handle action hotkeys 1-4
-        handleActionKeys();
+        // update action panel hover state
+        hudRenderer.updateHover(com.badlogic.gdx.Gdx.input.getX(), com.badlogic.gdx.Gdx.input.getY(), availableActions);
 
         //clear screen
         ScreenUtils.clear(Color.BLACK);
@@ -297,27 +302,10 @@ public class GameOneScreen extends ScreenAdapter
         if(enemy != null)   enemyPlayers.remove(enemy);
     }
 
-    private void handleActionKeys() {
-        if (availableActions == null) return;
-        int[] keys = {
-            com.badlogic.gdx.Input.Keys.NUM_1,
-            com.badlogic.gdx.Input.Keys.NUM_2,
-            com.badlogic.gdx.Input.Keys.NUM_3,
-            com.badlogic.gdx.Input.Keys.NUM_4
-        };
-        for (int i = 0; i < keys.length && i < availableActions.length; i++) {
-            if (Gdx.input.isKeyJustPressed(keys[i])) {
-                selectedActionIndex = i;
-                hudRenderer.setSelectedActionIndex(i);
-                executeSelectedAction();
-                return;
-            }
-        }
-    }
-
-    private void executeSelectedAction() {
+    private void executeAction(int index) {
         if (availableActions == null || localPlayer == null) return;
-        ActionType action = availableActions[selectedActionIndex];
+        if (index < 0 || index >= availableActions.length) return;
+        ActionType action = availableActions[index];
         ActionResult result = actionSystem.execute(localPlayer, enemyPlayers, action);
         hudRenderer.showFeedback(result);
         System.out.println("[Action] " + result.message);
