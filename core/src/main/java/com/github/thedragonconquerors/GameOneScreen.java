@@ -56,6 +56,7 @@ public class GameOneScreen extends ScreenAdapter
 
     private ActionSystem actionSystem;
     private ActionType[] availableActions;
+    private boolean gameReady = false;  // true once class has been selected and game is set up
 
     /**
      * Sets up the camera and the packet handler to communicate with the server
@@ -80,68 +81,58 @@ public class GameOneScreen extends ScreenAdapter
     @Override
     public void show()
     {
+        // returning from CharacterSelectScreen — just restore input, don't re-run setup
+        if (gameReady) {
+            Gdx.input.setInputProcessor(mouseInputHandler);
+            return;
+        }
+
         //build core system
         movementSystem = new MovementSystem();
         actionSystem = new ActionSystem();
 
-        Scanner scanner = new Scanner(System.in);
-
-        // ── step 1: pick team ─────────────────────────────────────
-        CharacterClass chosenClass = CharacterClass.WARRIOR;
-        while(true)
-        {
-            System.out.println("1. Blue \n2. Red");
-            System.out.print("Select team: ");
-            int teamIdx = scanner.nextInt();
-            if(teamIdx == 1 || teamIdx == 2)
-            {
-                // ── step 2: pick class ────────────────────────────
-                System.out.println("Select your class:");
-                CharacterClass[] classes = CharacterClass.values();
-                for (int i = 0; i < classes.length; i++) {
-                    System.out.println((i + 1) + ". " + classes[i].displayName);
-                }
-                System.out.print("Enter number: ");
-                int classIdx = scanner.nextInt() - 1;
-                if (classIdx >= 0 && classIdx < classes.length) {
-                    chosenClass = classes[classIdx];
-                }
-                System.out.println("Class selected: " + chosenClass.displayName);
-
-                float spawnX = (teamIdx == 1) ? 0 : 29;
-                spawnLocalPlayer(localPlayerId, "Name", spawnX, 9, chosenClass);
-                availableActions = ActionType.availableFor(chosenClass);
-                break;
-            }
-            System.out.println("Invalid team, please enter 1 or 2.");
-        }
-
-        //wire input = click anywhere to set target
-        mouseInputHandler = new MouseInputHandler(camera, viewport, localPlayer, movementSystem, this::sendLocalMove);
-        Gdx.input.setInputProcessor(mouseInputHandler);
-
-        // Load map first (blocking), then sprites individually with graceful fallback
+        // Load map and sprites first (blocking)
         TiledMap map = assetService.load(MAIN);
         mapRenderer = new OrthogonalTiledMapRenderer(map, Main.UNIT_SCALE, batch);
         navGrid = new NavGrid(map, Main.UNIT_SCALE, Main.WORLD_WIDTH, Main.WORLD_HEIGHT);
         movementSystem.setNavGrid(navGrid);
 
         for (SpriteAssets sprite : SpriteAssets.values()) {
-            try {
-                assetService.load(sprite);
-            } catch (Exception e) {
+            try { assetService.load(sprite); }
+            catch (Exception e) {
                 System.out.println("Sprite not found, skipping: " + sprite.name() + " (" + e.getMessage() + ")");
             }
         }
 
         playerRenderer = new PlayerRenderer(assetService);
         hudRenderer = new HudRenderer(viewport);
-
-        // wire action callback: index → execute action
         hudRenderer.setOnActionSelected(this::executeAction);
 
-        // give MouseInputHandler access to HUD so it can forward clicks
-        mouseInputHandler.setHudContext(hudRenderer, availableActions, localPlayer.getStats());
+        // ── terminal team selection, then hand off to character select screen
+        Scanner scanner = new Scanner(System.in);
+        int teamIdx = 0;
+        while (teamIdx != 1 && teamIdx != 2) {
+            System.out.println("1. Blue \n2. Red");
+            System.out.print("Select team: ");
+            teamIdx = scanner.nextInt();
+            if (teamIdx != 1 && teamIdx != 2) System.out.println("Invalid team, please enter 1 or 2.");
+        }
+
+        final int chosenTeam = teamIdx;
+
+        // switch to character select screen; it calls back into this screen when done
+        game.setScreen(new CharacterSelectScreen(game, chosenTeam, (chosenClass) -> {
+            float spawnX = (chosenTeam == 1) ? 0 : 29;
+            spawnLocalPlayer(localPlayerId, "Name", spawnX, 9, chosenClass);
+            availableActions = ActionType.availableFor(chosenClass);
+
+            mouseInputHandler = new MouseInputHandler(camera, viewport, localPlayer, movementSystem, this::sendLocalMove);
+            mouseInputHandler.setHudContext(hudRenderer, availableActions, localPlayer.getStats());
+            gameReady = true;
+            Gdx.input.setInputProcessor(mouseInputHandler);
+
+            game.setScreen(GameOneScreen.this);
+        }));
     }
 
     /**
@@ -165,6 +156,9 @@ public class GameOneScreen extends ScreenAdapter
      */
     @Override
     public void render(float delta){
+        // not ready yet (still on character select screen)
+        if (localPlayer == null || hudRenderer == null) return;
+
         //update player animation
         movementSystem.update(localPlayer, delta);
 
