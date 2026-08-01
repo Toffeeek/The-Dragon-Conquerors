@@ -15,17 +15,28 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
+import com.github.thedragonconquerors.entities.CharacterClass;
 import com.shared.shared.model.Packet;
 import lombok.Getter;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.Inet4Address;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms.
  *  The first class made after the application is launched. Acts as the entry point.
  * */
 public class Main extends Game
 {
+    public static final String DEFAULT_SERVER_URL = "ws://localhost:8080/ws";
+    public static final int SERVER_PORT = 8080;
     public static final float WORLD_WIDTH = 30f;
     public static final float WORLD_HEIGHT = 17f;
     public static final float UNIT_SCALE = 1f/16f;
@@ -43,6 +54,7 @@ public class Main extends Game
 
     private GLProfiler glProfiler;
     private FPSLogger fpsLogger;
+    private Process serverProcess;
 
     private final Map<Class<? extends Screen>, Screen> screenCache = new HashMap<>();
 
@@ -64,25 +76,116 @@ public class Main extends Game
         this.glProfiler.enable();
         this.fpsLogger = new FPSLogger();
 
-        setupNetworkClient();
-
-        addScreen(new GameOneScreen(this));
-        setScreen(GameOneScreen.class);
+        addScreen(new MenuScreen(this));
+        setScreen(MenuScreen.class);
     }
 
     /**
      * Sets up the means to communicate with the server via the networkClient object
      */
-    private void setupNetworkClient()
+    public NetworkClient connectToServer(String url) throws Exception
+    {
+        NetworkClient client = new NetworkClient(url);
+        client.setPacketHandler(packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
+        client.connect();
+        return client;
+    }
+
+    public void startLobby(NetworkClient networkClient, String joinUrl)
+    {
+        this.networkClient = networkClient;
+        addScreen(new LobbyScreen(this, joinUrl));
+        setScreen(LobbyScreen.class);
+    }
+
+    public void startGame(int teamIndex, CharacterClass chosenClass)
+    {
+        addScreen(new GameOneScreen(this, teamIndex, chosenClass));
+        setScreen(GameOneScreen.class);
+    }
+
+    public boolean startLocalServer() throws IOException
+    {
+        if(serverProcess != null && serverProcess.isAlive()) return false;
+
+        File rootDir = findProjectRoot();
+        String gradlew = System.getProperty("os.name").toLowerCase().contains("win") ? "gradlew.bat" : "./gradlew";
+
+        ProcessBuilder processBuilder = new ProcessBuilder(gradlew, ":server:bootRun");
+        processBuilder.directory(rootDir);
+        processBuilder.redirectErrorStream(true);
+        serverProcess = processBuilder.start();
+
+        Thread logThread = new Thread(() -> consumeServerOutput(serverProcess), "tdc-server-output");
+        logThread.setDaemon(true);
+        logThread.start();
+        return true;
+    }
+
+    public String getLocalJoinUrl()
+    {
+        return getLanAddress()
+            .map(address -> "ws://" + address + ":" + SERVER_PORT + "/ws")
+            .orElse(DEFAULT_SERVER_URL);
+    }
+
+    private Optional<String> getLanAddress()
     {
         try
         {
-            this.networkClient = new NetworkClient("ws://localhost:8080/ws");
-            this.networkClient.setPacketHandler(packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
-            this.networkClient.connect();
+            var interfaces = NetworkInterface.getNetworkInterfaces();
+            while(interfaces.hasMoreElements())
+            {
+                NetworkInterface networkInterface = interfaces.nextElement();
+                if(!networkInterface.isUp() || networkInterface.isLoopback() || networkInterface.isVirtual()) continue;
+
+                var addresses = networkInterface.getInetAddresses();
+                while(addresses.hasMoreElements())
+                {
+                    var address = addresses.nextElement();
+                    if(address instanceof Inet4Address && !address.isLoopbackAddress())
+                    {
+                        return Optional.of(address.getHostAddress());
+                    }
+                }
+            }
         }
-        catch (Exception e) {
-            throw new RuntimeException("Failed to connect to server", e);
+        catch(SocketException e)
+        {
+            System.out.println("Could not detect LAN address: " + e.getMessage());
+        }
+
+        return Optional.empty();
+    }
+
+    private File findProjectRoot() throws IOException
+    {
+        File current = new File(System.getProperty("user.dir")).getCanonicalFile();
+        while(current != null)
+        {
+            if(new File(current, "gradlew").isFile() && new File(current, "settings.gradle").isFile())
+            {
+                return current;
+            }
+            current = current.getParentFile();
+        }
+
+        throw new IOException("Could not find project root containing gradlew and settings.gradle");
+    }
+
+    private void consumeServerOutput(Process process)
+    {
+        try(BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream())))
+        {
+            String line;
+            while((line = reader.readLine()) != null)
+            {
+                System.out.println("[Server] " + line);
+            }
+        }
+        catch(IOException e)
+        {
+            System.out.println("[Server] Output reader stopped: " + e.getMessage());
         }
     }
 
@@ -143,6 +246,8 @@ public class Main extends Game
         screenCache.values().forEach(Screen::dispose);
         screenCache.clear();
 
+        if(networkClient != null) networkClient.disconnect();
+        if(serverProcess != null && serverProcess.isAlive()) serverProcess.destroy();
         this.batch.dispose();
         this.assetService.debugDiagnostic();
         this.assetService.dispose();

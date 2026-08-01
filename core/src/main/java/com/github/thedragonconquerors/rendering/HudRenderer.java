@@ -11,6 +11,7 @@ import com.github.thedragonconquerors.combat.ActionResult;
 import com.github.thedragonconquerors.combat.ActionType;
 import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.stats.StatComponent;
+import lombok.Setter;
 
 public class HudRenderer implements Disposable {
 
@@ -56,6 +57,7 @@ public class HudRenderer implements Disposable {
     private static final float FEEDBACK_DURATION = 2.5f;
 
     // ── action selection ──────────────────────────────────────────
+    @Setter
     private int selectedActionIndex = 0;
 
     public HudRenderer(Viewport viewport) {
@@ -69,10 +71,6 @@ public class HudRenderer implements Disposable {
     // ──────────────────────────────────────────────────────────────
     //  Public API
     // ──────────────────────────────────────────────────────────────
-
-    public void setSelectedActionIndex(int idx) {
-        this.selectedActionIndex = idx;
-    }
 
     /** Call this after an action executes to show a result message on screen. */
     public void showFeedback(ActionResult result) {

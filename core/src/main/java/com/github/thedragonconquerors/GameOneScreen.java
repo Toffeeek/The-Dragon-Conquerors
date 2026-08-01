@@ -53,6 +53,8 @@ public class GameOneScreen extends ScreenAdapter
     private HudRenderer hudRenderer;
 
     private final NetworkClient networkClient;
+    private final int teamIndex;
+    private final CharacterClass chosenClass;
 
     private ActionSystem actionSystem;
     private ActionType[] availableActions;
@@ -61,9 +63,11 @@ public class GameOneScreen extends ScreenAdapter
     /**
      * Sets up the camera and the packet handler to communicate with the server
      */
-    public GameOneScreen(Main game)
+    public GameOneScreen(Main game, int teamIndex, CharacterClass chosenClass)
     {
         this.networkClient = game.getNetworkClient();
+        this.teamIndex = teamIndex;
+        this.chosenClass = chosenClass;
         this.game = game;
         this.assetService = game.getAssetService();
         this.viewport = game.getViewport();
@@ -85,37 +89,9 @@ public class GameOneScreen extends ScreenAdapter
         movementSystem = new MovementSystem();
         actionSystem = new ActionSystem();
 
-        Scanner scanner = new Scanner(System.in);
-
-        // ── step 1: pick team ─────────────────────────────────────
-        CharacterClass chosenClass = CharacterClass.WARRIOR;
-        while(true)
-        {
-            System.out.println("1. Blue \n2. Red");
-            System.out.print("Select team: ");
-            int teamIdx = scanner.nextInt();
-            if(teamIdx == 1 || teamIdx == 2)
-            {
-                // ── step 2: pick class ────────────────────────────
-                System.out.println("Select your class:");
-                CharacterClass[] classes = CharacterClass.values();
-                for (int i = 0; i < classes.length; i++) {
-                    System.out.println((i + 1) + ". " + classes[i].displayName);
-                }
-                System.out.print("Enter number: ");
-                int classIdx = scanner.nextInt() - 1;
-                if (classIdx >= 0 && classIdx < classes.length) {
-                    chosenClass = classes[classIdx];
-                }
-                System.out.println("Class selected: " + chosenClass.displayName);
-
-                float spawnX = (teamIdx == 1) ? 0 : 29;
-                spawnLocalPlayer(localPlayerId, "Name", spawnX, 9, chosenClass);
-                availableActions = ActionType.availableFor(chosenClass);
-                break;
-            }
-            System.out.println("Invalid team, please enter 1 or 2.");
-        }
+        float spawnX = (teamIndex == 1) ? 0 : 29;
+        spawnLocalPlayer(localPlayerId, "Name", spawnX, 9, chosenClass);
+        availableActions = ActionType.availableFor(chosenClass);
 
         //wire input = click anywhere to set target
         mouseInputHandler = new MouseInputHandler(camera, viewport, localPlayer, movementSystem, this::sendLocalMove);
