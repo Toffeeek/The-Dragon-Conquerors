@@ -25,10 +25,14 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.Inet4Address;
 import java.net.NetworkInterface;
+import java.net.ServerSocket;
 import java.net.SocketException;
+import java.time.Duration;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 /** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms.
  *  The first class made after the application is launched. Acts as the entry point.
@@ -55,6 +59,8 @@ public class Main extends Game
     private GLProfiler glProfiler;
     private FPSLogger fpsLogger;
     private Process serverProcess;
+    private Thread serverShutdownHook;
+    private int localServerPort = SERVER_PORT;
 
     private final Map<Class<? extends Screen>, Screen> screenCache = new HashMap<>();
 
@@ -75,6 +81,9 @@ public class Main extends Game
         this.glProfiler = new GLProfiler(Gdx.graphics);
         this.glProfiler.enable();
         this.fpsLogger = new FPSLogger();
+
+        serverShutdownHook = new Thread(this::stopLocalServer, "tdc-server-shutdown");
+        Runtime.getRuntime().addShutdownHook(serverShutdownHook);
 
         addScreen(new MenuScreen(this));
         setScreen(MenuScreen.class);
@@ -110,8 +119,13 @@ public class Main extends Game
 
         File rootDir = findProjectRoot();
         String gradlew = System.getProperty("os.name").toLowerCase().contains("win") ? "gradlew.bat" : "./gradlew";
+        localServerPort = findAvailablePort();
 
-        ProcessBuilder processBuilder = new ProcessBuilder(gradlew, ":server:bootRun");
+        ProcessBuilder processBuilder = new ProcessBuilder(
+            gradlew,
+            ":server:bootRun",
+            "--args=--server.port=" + localServerPort
+        );
         processBuilder.directory(rootDir);
         processBuilder.redirectErrorStream(true);
         serverProcess = processBuilder.start();
@@ -122,11 +136,60 @@ public class Main extends Game
         return true;
     }
 
+    public void stopLocalServer()
+    {
+        Process process = serverProcess;
+        if(process == null) return;
+
+        ProcessHandle processHandle = process.toHandle();
+        processHandle.descendants()
+            .sorted(Comparator.comparing(ProcessHandle::pid).reversed())
+            .forEach(ProcessHandle::destroy);
+        processHandle.destroy();
+
+        waitForExit(process, Duration.ofSeconds(3));
+
+        processHandle.descendants()
+            .sorted(Comparator.comparing(ProcessHandle::pid).reversed())
+            .forEach(ProcessHandle::destroyForcibly);
+        if(processHandle.isAlive()) processHandle.destroyForcibly();
+
+        waitForExit(process, Duration.ofSeconds(2));
+        serverProcess = null;
+        localServerPort = SERVER_PORT;
+    }
+
+    private void waitForExit(Process process, Duration timeout)
+    {
+        try
+        {
+            process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        }
+        catch(InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     public String getLocalJoinUrl()
     {
         return getLanAddress()
-            .map(address -> "ws://" + address + ":" + SERVER_PORT + "/ws")
-            .orElse(DEFAULT_SERVER_URL);
+            .map(address -> "ws://" + address + ":" + localServerPort + "/ws")
+            .orElse(getLocalServerUrl());
+    }
+
+    public String getLocalServerUrl()
+    {
+        return "ws://localhost:" + localServerPort + "/ws";
+    }
+
+    private int findAvailablePort() throws IOException
+    {
+        try(ServerSocket socket = new ServerSocket(0))
+        {
+            socket.setReuseAddress(true);
+            return socket.getLocalPort();
+        }
     }
 
     private Optional<String> getLanAddress()
@@ -247,10 +310,25 @@ public class Main extends Game
         screenCache.clear();
 
         if(networkClient != null) networkClient.disconnect();
-        if(serverProcess != null && serverProcess.isAlive()) serverProcess.destroy();
+        stopLocalServer();
+        removeServerShutdownHook();
         this.batch.dispose();
         this.assetService.debugDiagnostic();
         this.assetService.dispose();
+    }
+
+    private void removeServerShutdownHook()
+    {
+        if(serverShutdownHook == null) return;
+
+        try
+        {
+            Runtime.getRuntime().removeShutdownHook(serverShutdownHook);
+        }
+        catch(IllegalStateException ignored)
+        {
+            // JVM shutdown already started; the hook will run normally.
+        }
     }
 
 }

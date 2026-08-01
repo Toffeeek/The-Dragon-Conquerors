@@ -3,16 +3,16 @@ package com.shared.shared.model.stats;
 import lombok.Getter;
 import lombok.Setter;
 
-import static java.lang.Math.clamp;
-
-
-@Setter
 @Getter
 public class StatComponent {
+    @Setter
     private int hp;
+    @Setter
     private int maxHp;
 
+    @Setter
     private int mana;
+    @Setter
     private int maxMana;
 
     private int accuracy;
@@ -64,5 +64,25 @@ public class StatComponent {
 
     private static int clamp(int value, int min, int max){
         return Math.max(min, Math.min(max, value));
+    }
+
+    public void setAccuracy(int accuracy) {
+        this.accuracy = clamp(accuracy, 1, 20);
+    }
+
+    public void setStrength(int strength) {
+        this.strength = clamp(strength, 1, 20);
+    }
+
+    public void setSpeed(int speed) {
+        this.speed = clamp(speed, 1, 20);
+    }
+
+    public void setInspiration(int inspiration) {
+        this.inspiration = clamp(inspiration, 1, 20);
+    }
+
+    public void setWisdom(int wisdom) {
+        this.wisdom = clamp(wisdom, 1, 20);
     }
 }

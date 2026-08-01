@@ -2,6 +2,7 @@ package com.client.client;
 
 import com.badlogic.gdx.math.Vector2;
 import com.shared.shared.model.Action;
+import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
 import lombok.Setter;
 import org.springframework.messaging.converter.JacksonJsonMessageConverter;
@@ -99,13 +100,14 @@ public class NetworkClient
         }
     }
 
-    public void join(String username, Vector2 startingPosition)
+    public void join(String username, Vector2 startingPosition, CharacterClass characterClass)
     {
         if (session != null && session.isConnected())
         {
             Packet joinPacket = Packet.builder()
                 .username(username)
                 .finalPosition(startingPosition)
+                .characterClass(characterClass)
                 .action(Action.JOIN)
                 .build();
             session.send("/app/game.joinGame", joinPacket);

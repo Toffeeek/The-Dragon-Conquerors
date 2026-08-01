@@ -92,9 +92,9 @@ public class MenuScreen extends ScreenAdapter {
 
         Thread hostThread = new Thread(() -> {
             try {
-                String joinUrl = game.getLocalJoinUrl();
                 game.startLocalServer();
-                NetworkClient client = connectWithRetry(Main.DEFAULT_SERVER_URL);
+                String joinUrl = game.getLocalJoinUrl();
+                NetworkClient client = connectWithRetry(game.getLocalServerUrl());
                 Gdx.app.postRunnable(() -> game.startLobby(client, joinUrl));
             } catch (Exception e) {
                 Gdx.app.postRunnable(() -> {

@@ -54,23 +54,19 @@ public class Player {
         this.movementController = new MovementController(maxDistance);
     }
 
-    public Player(int ID, String username, Vector2 startingPosition)
-    {
-        this.ID = ID;
-        this.username = username;
-        this.position = new Vector2(startingPosition);
-        this.characterClass = CharacterClass.WARRIOR;
-        this.stats = StatComponent.defaultStats();
-        this.speed = 5f;
-
-        //max movement distance per turn derived from speed stat
-        float maxDistance = StatCalculator.deriveMaxMovementDistance(stats);
-        this.movementController = new MovementController(maxDistance);
-    }
-
-    public Player(int ID, String username, float startX, float startY){
-        this(ID, username, startX, startY, CharacterClass.WARRIOR, StatComponent.defaultStats());
-    }
+//    public Player(int ID, String username, Vector2 startingPosition)
+//    {
+//        this.ID = ID;
+//        this.username = username;
+//        this.position = new Vector2(startingPosition);
+//        this.characterClass = CharacterClass.WARRIOR;
+//        this.stats = StatComponent.defaultStats();
+//        this.speed = 5f;
+//
+//        //max movement distance per turn derived from speed stat
+//        float maxDistance = StatCalculator.deriveMaxMovementDistance(stats);
+//        this.movementController = new MovementController(maxDistance);
+//    }
 
     public void onTurnStart(){
         movementController.resetForNewTurn();

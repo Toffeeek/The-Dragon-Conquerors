@@ -3,7 +3,6 @@ package com.server.server.server;
 
 
 import com.badlogic.gdx.math.Vector2;
-import com.github.thedragonconquerors.entities.Player;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
@@ -84,7 +83,7 @@ public class GameController
                     .username(playerEntry.getValue().first)
                     .finalPosition(playerEntry.getValue().second)
                     .action(Action.PLAYER_COORDINATE)
-                    .characterClass(p.getCharacterClass())
+                    .characterClass(playerClasses.get(playerEntry.getKey()))
                     .activePlayerID(activePlayerId)
                     .build();
             messageTemplate.convertAndSendToUser

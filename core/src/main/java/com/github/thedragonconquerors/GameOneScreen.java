@@ -127,7 +127,7 @@ public class GameOneScreen extends ScreenAdapter
         receivingInitialPlayerList = true;
 
         Vector2 startingPosition = new Vector2(worldX, worldY);
-        networkClient.join("local-player", startingPosition);
+        networkClient.join("local-player", startingPosition, characterClass);
         localPlayer = new Player(-1, username, startingPosition, characterClass);
     }
 
@@ -190,6 +190,11 @@ public class GameOneScreen extends ScreenAdapter
                 System.out.println("Finished receiving existing players. Count: " + enemyPlayers.size());
                 break;
             case JOIN:
+                if(isPendingLocalJoin(packet))
+                {
+                    System.out.println("Received my own join packet before confirmation.. ignoring");
+                    break;
+                }
                 if(packet.getID() != localPlayerId && !playersById.containsKey(packet.getID()))
                 {
                     Vector2 position = packet.getFinalPosition();
@@ -197,9 +202,9 @@ public class GameOneScreen extends ScreenAdapter
                     Player player = new Player
                     (
                         packet.getID(),
-
                         packet.getUsername(),
-                        new Vector2(position)
+                        new Vector2(position),
+                        packet.getCharacterClass() == null ? CharacterClass.WARRIOR : packet.getCharacterClass()
                     );
                     enemyPlayers.add(player);
                     playersById.put(packet.getID(), player);
@@ -262,11 +267,21 @@ public class GameOneScreen extends ScreenAdapter
 
         if(packet.getID() == localPlayerId || playersById.containsKey(packet.getID()))  return;
 
-        Player existingPlayer = new Player(packet.getID(), packet.getUsername(), new Vector2(position));
+        CharacterClass characterClass = packet.getCharacterClass() == null ? CharacterClass.WARRIOR : packet.getCharacterClass();
+        Player existingPlayer = new Player(packet.getID(), packet.getUsername(), new Vector2(position), characterClass);
         enemyPlayers.add(existingPlayer);
         playersById.put(packet.getID(), existingPlayer);
 
         if(receivingInitialPlayerList)  System.out.println("Received existingPlayer player " + packet.getID() + " at " + position.x + ", " + position.y);
+    }
+
+    private boolean isPendingLocalJoin(Packet packet)
+    {
+        if(localPlayerId >= 0 || localPlayer == null || packet.getFinalPosition() == null) return false;
+
+        return "local-player".equals(packet.getUsername())
+            && localPlayer.getPosition().epsilonEquals(packet.getFinalPosition(), 0.001f)
+            && packet.getCharacterClass() == chosenClass;
     }
 
     private void removeEnemyPlayer(int id)
