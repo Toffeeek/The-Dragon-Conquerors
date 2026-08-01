@@ -1,8 +1,11 @@
-package com.github.thedragonconquerors.entities;
+package com.shared.shared.model;
 
-import com.github.thedragonconquerors.stats.StatComponent;
+import com.shared.shared.model.stats.StatComponent;
+import lombok.Getter;
 
-public enum CharacterClass {
+@Getter
+public enum CharacterClass
+{
     WARRIOR("Warrior", new StatComponent(120, 35, 10, 14, 9, 8, 8)),
     MAGE("Mage", new StatComponent(80, 100, 12, 6, 9, 11, 16)),
     ARCHER("Archer", new StatComponent(90, 60, 15, 10, 13, 10, 10)),

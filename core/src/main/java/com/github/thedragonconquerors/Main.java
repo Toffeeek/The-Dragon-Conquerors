@@ -15,7 +15,7 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
-import com.github.thedragonconquerors.entities.CharacterClass;
+import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
 import lombok.Getter;
 

@@ -9,6 +9,7 @@ public enum Action
     SECONDARY,
     ULTIMATE,
     MOVE,
+    END_TURN,
     LEAVE,
     ERROR,
     PLAYER_COORDINATE,

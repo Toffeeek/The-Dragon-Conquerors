@@ -14,7 +14,7 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
 import com.github.thedragonconquerors.assets.SpriteAssets;
-import com.github.thedragonconquerors.entities.CharacterClass;
+import com.shared.shared.model.CharacterClass;
 import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.input.MouseInputHandler;
 import com.github.thedragonconquerors.movement.MovementSystem;
@@ -56,6 +56,7 @@ public class GameOneScreen extends ScreenAdapter
     private final int teamIndex;
     private final CharacterClass chosenClass;
 
+    private int activePlayerId;
     private ActionSystem actionSystem;
     private ActionType[] availableActions;
     private int selectedActionIndex = 0;
@@ -89,7 +90,7 @@ public class GameOneScreen extends ScreenAdapter
         movementSystem = new MovementSystem();
         actionSystem = new ActionSystem();
 
-        float spawnX = (teamIndex == 1) ? 0 : 29;
+        float spawnX = (teamIndex == 1) ? 1 : 28;
         spawnLocalPlayer(localPlayerId, "Name", spawnX, 9, chosenClass);
         availableActions = ActionType.availableFor(chosenClass);
 
@@ -127,7 +128,7 @@ public class GameOneScreen extends ScreenAdapter
 
         Vector2 startingPosition = new Vector2(worldX, worldY);
         networkClient.join("local-player", startingPosition);
-        localPlayer = new Player(-1, username, worldX, worldY, characterClass);
+        localPlayer = new Player(-1, username, startingPosition, characterClass);
     }
 
     /**
@@ -196,6 +197,7 @@ public class GameOneScreen extends ScreenAdapter
                     Player player = new Player
                     (
                         packet.getID(),
+
                         packet.getUsername(),
                         new Vector2(position)
                     );

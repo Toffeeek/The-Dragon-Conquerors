@@ -2,8 +2,9 @@ package com.github.thedragonconquerors.entities;
 
 import com.badlogic.gdx.math.Vector2;
 import com.github.thedragonconquerors.movement.MovementController;
-import com.github.thedragonconquerors.stats.StatCalculator;
-import com.github.thedragonconquerors.stats.StatComponent;
+import com.shared.shared.model.CharacterClass;
+import com.shared.shared.model.stats.StatCalculator;
+import com.shared.shared.model.stats.StatComponent;
 import lombok.Getter;
 
 public class Player {
@@ -24,24 +25,33 @@ public class Player {
     @Getter
     private final MovementController movementController;
 
-    public Player(int ID, String username, float startX, float startY, CharacterClass characterClass, StatComponent stats)
+//    public Player(int ID, String username, float startX, float startY, CharacterClass characterClass, StatComponent stats)
+//    {
+//        this.ID = ID;
+//        this.username = username;
+//        this.characterClass = characterClass;
+//
+//        this.stats = stats;
+//        this.position = new Vector2(startX, startY);
+//        this.speed = 5f;
+//
+//        //max movement distance per turn derived from speed stat
+//        float maxDistance = StatCalculator.deriveMaxMovementDistance(stats);
+//        this.movementController = new MovementController(maxDistance);
+//    }
+    public Player(int ID, String username, Vector2 position, CharacterClass characterClass)
     {
         this.ID = ID;
         this.username = username;
         this.characterClass = characterClass;
 
-        this.stats = stats;
-        this.position = new Vector2(startX, startY);
+        this.stats = characterClass.getBaseStats();
+        this.position = position;
         this.speed = 5f;
 
         //max movement distance per turn derived from speed stat
-        float maxDistance = StatCalculator.deriveMaxMovementDistance(stats);
+        float maxDistance = StatCalculator.deriveMaxMovementDistance(characterClass.getBaseStats());
         this.movementController = new MovementController(maxDistance);
-    }
-
-    public Player(int ID, String username, float startX, float startY, CharacterClass characterClass)
-    {
-        this(ID, username, startX, startY, characterClass, characterClass.createStats());
     }
 
     public Player(int ID, String username, Vector2 startingPosition)

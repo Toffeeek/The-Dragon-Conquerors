@@ -1,4 +1,4 @@
-package com.github.thedragonconquerors.stats;
+package com.shared.shared.model.stats;
 
 /**
  * derives gameplay values from raw stats

@@ -3,7 +3,9 @@ package com.server.server.server;
 
 
 import com.badlogic.gdx.math.Vector2;
+import com.github.thedragonconquerors.entities.Player;
 import com.shared.shared.model.Action;
+import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
 import com.shared.shared.model.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +18,7 @@ import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.stereotype.Controller;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -24,16 +27,27 @@ public class GameController
 {
     @Autowired
     private SimpMessageSendingOperations messageTemplate;
-    private int currPlayerIndex = 0;
+    private int totalPlayers = 0;
+    private int activePlayerId;
 
 
+    // ID : {username, (x,y)}
     private Map<Integer, Pair<String, Vector2>> playerCoordinates = new HashMap<>();
+    private ArrayList<CharacterClass> playerClasses = new ArrayList<>();
+
 
     @MessageMapping("/game.takeAction")
     @SendTo("/match/public")
     public Packet takeAction(@Payload Packet p)
     {
         playerCoordinates.put(p.getID(), new Pair<>(p.getUsername(), p.getFinalPosition()));
+
+        if(p.getAction() == Action.END_TURN)
+        {
+            activePlayerId = (activePlayerId + 1) % totalPlayers;
+        }
+        p.setActivePlayerID(activePlayerId);
+
         return p;
     }
 
@@ -41,7 +55,14 @@ public class GameController
     @SendTo("/match/public")
     public Packet addPlayer(@Payload Packet p, SimpMessageHeaderAccessor headerAccessor)
     {
-        int assignedID = currPlayerIndex++;
+        playerClasses.add(p.getCharacterClass());
+
+        if(totalPlayers == 0)
+        {
+            activePlayerId = 0;
+        }
+
+        int assignedID = totalPlayers++;
         String sessionId = headerAccessor.getSessionId();
 
         p.setID(assignedID);
@@ -63,6 +84,8 @@ public class GameController
                     .username(playerEntry.getValue().first)
                     .finalPosition(playerEntry.getValue().second)
                     .action(Action.PLAYER_COORDINATE)
+                    .characterClass(p.getCharacterClass())
+                    .activePlayerID(activePlayerId)
                     .build();
             messageTemplate.convertAndSendToUser
             (

@@ -10,7 +10,7 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 import com.github.thedragonconquerors.combat.ActionResult;
 import com.github.thedragonconquerors.combat.ActionType;
 import com.github.thedragonconquerors.entities.Player;
-import com.github.thedragonconquerors.stats.StatComponent;
+import com.shared.shared.model.stats.StatComponent;
 import lombok.Setter;
 
 public class HudRenderer implements Disposable {

@@ -1,8 +1,8 @@
 package com.github.thedragonconquerors.combat;
 
 import com.github.thedragonconquerors.entities.Player;
-import com.github.thedragonconquerors.stats.StatCalculator;
-import com.github.thedragonconquerors.stats.StatComponent;
+import com.shared.shared.model.stats.StatCalculator;
+import com.shared.shared.model.stats.StatComponent;
 
 import java.util.List;
 import java.util.Random;

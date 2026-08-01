@@ -1,4 +1,4 @@
-package com.github.thedragonconquerors.stats;
+package com.shared.shared.model.stats;
 
 import lombok.Getter;
 import lombok.Setter;

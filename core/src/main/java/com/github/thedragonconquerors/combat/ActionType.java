@@ -1,6 +1,6 @@
 package com.github.thedragonconquerors.combat;
 
-import com.github.thedragonconquerors.entities.CharacterClass;
+import com.shared.shared.model.CharacterClass;
 
 /**
  * Every action a player can perform during their turn.
