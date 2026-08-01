@@ -13,11 +13,11 @@
             }
         },
         "map1_alt.tmx": {
-            "scale": 16,
+            "scale": 3,
             "selectedLayer": 0,
             "viewCenter": {
-                "x": 86.3125,
-                "y": 130.875
+                "x": 203.16666666666663,
+                "y": 138.33333333333331
             }
         },
         "tileset.tsx": {

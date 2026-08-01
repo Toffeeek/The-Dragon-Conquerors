@@ -135,7 +135,7 @@ public class GameOneScreen extends ScreenAdapter
             }
         }
 
-        playerRenderer = new PlayerRenderer(assetService);
+        playerRenderer = new PlayerRenderer();
         hudRenderer = new HudRenderer(viewport);
     }
 
