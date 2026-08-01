@@ -12,13 +12,16 @@ import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
+import lombok.Getter;
 
 import java.util.*;
 
 public class NavGrid {
     public static final float NODE_SIZE = 0.25f;
 
+    @Getter
     private final int cols;
+    @Getter
     private final int rows;
     private final boolean[][] walkable;
     private final float worldWidth;
@@ -504,11 +507,7 @@ public class NavGrid {
         return walkable[c][r];
     }
 
-    public int getCols() {
-        return cols;
-    }
-
-    public int getRows() {
-        return rows;
-    }
+//    public int getRows() {
+//        return rows;
+//    }
 }

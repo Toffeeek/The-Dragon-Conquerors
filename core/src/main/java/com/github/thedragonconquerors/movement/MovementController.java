@@ -1,6 +1,7 @@
 package com.github.thedragonconquerors.movement;
 
 import com.badlogic.gdx.math.Vector2;
+import lombok.Getter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,11 +15,15 @@ import java.util.List;
  */
 
 public class MovementController {
+    @Getter
     private List<Vector2> path = new ArrayList<>();
     private int waypointIndex  = 0;
+    @Getter
     private boolean moving     = false;
 
+    @Getter
     private float remainingMovementDistance;
+    @Getter
     private final float maxMovementDistance;
 
     public MovementController(float maxMovementDistance) {
@@ -104,8 +109,4 @@ public class MovementController {
         return path.get(path.size() - 1);
     }
 
-    public boolean isMoving()                       { return moving; }
-    public float getRemainingMovementDistance()     { return remainingMovementDistance; }
-    public float getMaxMovementDistance()           { return maxMovementDistance; }
-    public List<Vector2> getPath()                  { return path; }
 }

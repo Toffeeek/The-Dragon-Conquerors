@@ -1,7 +1,13 @@
 package com.github.thedragonconquerors.stats;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import static java.lang.Math.clamp;
 
+
+@Setter
+@Getter
 public class StatComponent {
     private int hp;
     private int maxHp;
@@ -58,73 +64,5 @@ public class StatComponent {
 
     private static int clamp(int value, int min, int max){
         return Math.max(min, Math.min(max, value));
-    }
-
-    //getters
-
-    public int getHp() {
-        return hp;
-    }
-
-    public int getMaxHp() {
-        return maxHp;
-    }
-
-    public int getMana() {
-        return mana;
-    }
-
-    public int getMaxMana() {
-        return maxMana;
-    }
-
-    public int getAccuracy() {
-        return accuracy;
-    }
-
-    public int getStrength() {
-        return strength;
-    }
-
-    public int getSpeed() {
-        return speed;
-    }
-
-    public int getInspiration() {
-        return inspiration;
-    }
-
-    public int getWisdom() {
-        return wisdom;
-    }
-
-    //setters
-
-    public void setHp(int hp) {
-        this.hp = hp;
-    }
-
-    public void setMana(int mana) {
-        this.mana = mana;
-    }
-
-    public void setAccuracy(int accuracy) {
-        this.accuracy = accuracy;
-    }
-
-    public void setStrength(int strength) {
-        this.strength = strength;
-    }
-
-    public void setSpeed(int speed) {
-        this.speed = speed;
-    }
-
-    public void setInspiration(int inspiration) {
-        this.inspiration = inspiration;
-    }
-
-    public void setWisdom(int wisdom) {
-        this.wisdom = wisdom;
     }
 }
