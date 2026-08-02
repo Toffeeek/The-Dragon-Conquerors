@@ -1,22 +1,38 @@
 package com.github.thedragonconquerors.assets;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.assets.AssetDescriptor;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.assets.loaders.FileHandleResolver;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
 import com.badlogic.gdx.utils.Disposable;
+import com.github.thedragonconquerors.entities.CharacterClass;
+
+import java.util.EnumMap;
 
 public class AssetService implements Disposable {
 
+    private static final int   WALK_FRAMES    = 4;
+    private static final float FRAME_DURATION = 0.15f;
+    private static final int   FRAME_W        = 16;
+    private static final int   FRAME_H        = 16;
+
     private final AssetManager assetManager;
+
+    // cached walk animations, built once the walk sheet is loaded
+    private final EnumMap<CharacterClass, Animation<TextureRegion>> walkAnimations =
+        new EnumMap<>(CharacterClass.class);
 
     public AssetService(FileHandleResolver fileHandleResolver) {
         this.assetManager = new AssetManager(fileHandleResolver);
         this.assetManager.setLoader(TiledMap.class, new TmxMapLoader(fileHandleResolver));
     }
 
-    // ── synchronous load (blocks until finished) ──────────────────
+    // ── load / queue ──────────────────────────────────────────────
 
     public <T> T load(Asset<T> asset) {
         this.assetManager.load(asset.getDescriptor());
@@ -24,54 +40,69 @@ public class AssetService implements Disposable {
         return this.assetManager.get(asset.getDescriptor());
     }
 
-    // ── async queue & poll ─────────────────────────────────────────
-
     public <T> void queue(Asset<T> asset) {
         this.assetManager.load(asset.getDescriptor());
     }
 
-    /**
-     * Queues every entry in an Asset enum array for async loading.
-     * Example:
-     * <pre>
-     *   assetService.queueAll(SpriteAssets.values());
-     *   // then poll assetService.update() each frame until true
-     * </pre>
-     */
     public <T> void queueAll(Asset<T>[] assets) {
-        for (Asset<T> asset : assets) {
-            queue(asset);
-        }
+        for (Asset<T> a : assets) queue(a);
     }
 
-    /** Advances async loading; returns true when all queued assets are ready. */
-    public boolean update() {
-        return this.assetManager.update();
-    }
-
-    // ── retrieval ─────────────────────────────────────────────────
+    public boolean update() { return this.assetManager.update(); }
 
     public <T> T get(Asset<T> asset) {
         return this.assetManager.get(asset.getDescriptor());
     }
 
-    /**
-     * Returns the asset if it has been loaded, or null if it hasn't been
-     * queued / the file is missing.  Use this for optional assets such as
-     * character sprites that may not yet have artwork.
-     */
     public <T> T tryGet(Asset<T> asset) {
         if (asset == null) return null;
         try {
-            if (this.assetManager.isLoaded(asset.getDescriptor().fileName,
-                                           asset.getDescriptor().type)) {
-                return this.assetManager.get(asset.getDescriptor());
-            }
-        } catch (Exception ignored) { /* file not found or not loaded yet */ }
+            if (assetManager.isLoaded(asset.getDescriptor().fileName, asset.getDescriptor().type))
+                return assetManager.get(asset.getDescriptor());
+        } catch (Exception ignored) {}
         return null;
     }
 
-    // ── diagnostics & disposal ────────────────────────────────────
+    public <T> T tryGet(AssetDescriptor<T> desc) {
+        if (desc == null) return null;
+        try {
+            if (assetManager.isLoaded(desc.fileName, desc.type))
+                return assetManager.get(desc);
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    // ── walk animation ────────────────────────────────────────────
+
+    /**
+     * Loads the walk spritesheet for all classes and builds Animation objects.
+     * Call this after the map has loaded (same place you loaded individual sprites).
+     */
+    public void loadWalkAnimations() {
+        for (SpriteAssets sa : SpriteAssets.values()) {
+            try {
+                assetManager.load(sa.getWalkDescriptor());
+                assetManager.finishLoading();
+                Texture sheet = assetManager.get(sa.getWalkDescriptor());
+                TextureRegion[] frames = new TextureRegion[WALK_FRAMES];
+                for (int i = 0; i < WALK_FRAMES; i++) {
+                    frames[i] = new TextureRegion(sheet, i * FRAME_W, 0, FRAME_W, FRAME_H);
+                }
+                walkAnimations.put(sa.getCharacterClass(),
+                    new Animation<>(FRAME_DURATION, frames));
+            } catch (Exception e) {
+                Gdx.app.log("AssetService", "Walk sheet not found for "
+                    + sa.name() + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Returns the walk animation for the given class, or null if not loaded.
+     */
+    public Animation<TextureRegion> getWalkAnimation(CharacterClass cls) {
+        return walkAnimations.get(cls);
+    }
 
     public void debugDiagnostic() {
         Gdx.app.debug("Asset Service", this.assetManager.getDiagnostics());

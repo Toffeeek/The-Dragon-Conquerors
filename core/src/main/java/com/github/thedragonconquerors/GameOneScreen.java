@@ -104,6 +104,7 @@ public class GameOneScreen extends ScreenAdapter
             }
         }
 
+        assetService.loadWalkAnimations();
         playerRenderer = new PlayerRenderer(assetService);
         hudRenderer = new HudRenderer(viewport);
         hudRenderer.setOnActionSelected(this::executeAction);
@@ -182,7 +183,7 @@ public class GameOneScreen extends ScreenAdapter
         mapRenderer.render();
 
         //render player
-        playerRenderer.render(localPlayer, camera.combined, navGrid);
+        playerRenderer.render(localPlayer, camera.combined, navGrid, delta);
         for(Player player : enemyPlayers)
         {
             playerRenderer.render(player, camera.combined);
