@@ -57,6 +57,7 @@ public class HudRenderer implements Disposable {
 
     // Persistent while a targeted action is waiting for a mouse click.
     private String targetingPrompt = "";
+    private String joinUrl = "";
 
     // ── action selection ──────────────────────────────────────────
     private int selectedActionIndex = 0;
@@ -95,6 +96,10 @@ public class HudRenderer implements Disposable {
 
     public void clearTargetingPrompt() {
         this.targetingPrompt = "";
+    }
+
+    public void setJoinUrl(String joinUrl) {
+        this.joinUrl = joinUrl == null ? "" : joinUrl;
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -172,6 +177,10 @@ public class HudRenderer implements Disposable {
 
         // end turn hint (top-right)
         font.draw(hudBatch, "[E] End Turn", sw - 120f, 24f);
+
+        if (!joinUrl.isEmpty()) {
+            font.draw(hudBatch, "Join: " + joinUrl, 16f, sh - 14f);
+        }
 
         // action slot labels
         for (int i = 0; i < actions.length; i++) {

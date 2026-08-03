@@ -45,7 +45,9 @@ public class NetworkClient
 
                 @Override
                 public void handleTransportError(StompSession session, Throwable exception) {
-                    System.out.println("Transport error: " + exception.getMessage());
+                    if(NetworkClient.this.session != null && NetworkClient.this.session.isConnected()) {
+                        System.out.println("Transport error: " + exception.getMessage());
+                    }
                 }
             }
         ).get();

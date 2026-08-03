@@ -19,6 +19,8 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.client.client.NetworkClient;
 
+import java.time.Duration;
+
 public class MenuScreen extends ScreenAdapter {
     private final Main game;
     private Stage stage;
@@ -93,6 +95,9 @@ public class MenuScreen extends ScreenAdapter {
         Thread hostThread = new Thread(() -> {
             try {
                 game.startLocalServer();
+                if(!game.waitForLocalServer(Duration.ofSeconds(30))) {
+                    throw new IllegalStateException("Local server did not become ready.");
+                }
                 String joinUrl = game.getLocalJoinUrl();
                 NetworkClient client = connectWithRetry(game.getLocalServerUrl());
                 Gdx.app.postRunnable(() -> game.startLobby(client, joinUrl));

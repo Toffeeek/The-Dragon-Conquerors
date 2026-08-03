@@ -99,6 +99,7 @@ public class GameOneScreen extends ScreenAdapter {
 
         playerRenderer = new PlayerRenderer(assetService, batch);
         hudRenderer = new HudRenderer(viewport);
+        hudRenderer.setJoinUrl(game.getHostedJoinUrl());
         mouseInputHandler = new MouseInputHandler(
             camera, viewport, localPlayer, movementSystem,
             this::handleWorldClick, this::sendLocalMove);

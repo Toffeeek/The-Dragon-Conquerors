@@ -24,8 +24,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.Inet4Address;
+import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.SocketException;
 import java.time.Duration;
 import java.util.Comparator;
@@ -61,6 +63,8 @@ public class Main extends Game
     private Process serverProcess;
     private Thread serverShutdownHook;
     private int localServerPort = SERVER_PORT;
+    @Getter
+    private String hostedJoinUrl = DEFAULT_SERVER_URL;
 
     private final Map<Class<? extends Screen>, Screen> screenCache = new HashMap<>();
 
@@ -103,6 +107,7 @@ public class Main extends Game
     public void startLobby(NetworkClient networkClient, String joinUrl)
     {
         this.networkClient = networkClient;
+        this.hostedJoinUrl = joinUrl;
         addScreen(new LobbyScreen(this, joinUrl));
         setScreen(LobbyScreen.class);
     }
@@ -136,6 +141,35 @@ public class Main extends Game
         return true;
     }
 
+    public boolean waitForLocalServer(Duration timeout)
+    {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while(System.nanoTime() < deadline)
+        {
+            if(serverProcess != null && !serverProcess.isAlive()) return false;
+
+            try(Socket socket = new Socket())
+            {
+                socket.connect(new InetSocketAddress("localhost", localServerPort), 250);
+                return true;
+            }
+            catch(IOException ignored)
+            {
+                try
+                {
+                    Thread.sleep(250L);
+                }
+                catch(InterruptedException e)
+                {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public void stopLocalServer()
     {
         Process process = serverProcess;
@@ -157,6 +191,7 @@ public class Main extends Game
         waitForExit(process, Duration.ofSeconds(2));
         serverProcess = null;
         localServerPort = SERVER_PORT;
+        hostedJoinUrl = DEFAULT_SERVER_URL;
     }
 
     private void waitForExit(Process process, Duration timeout)
@@ -185,6 +220,16 @@ public class Main extends Game
 
     private int findAvailablePort() throws IOException
     {
+        try(ServerSocket socket = new ServerSocket(SERVER_PORT))
+        {
+            socket.setReuseAddress(true);
+            return SERVER_PORT;
+        }
+        catch(IOException ignored)
+        {
+            // Fall back to a random free port when the default server port is in use.
+        }
+
         try(ServerSocket socket = new ServerSocket(0))
         {
             socket.setReuseAddress(true);
