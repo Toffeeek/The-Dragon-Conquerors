@@ -1,80 +1,57 @@
 package com.github.thedragonconquerors.entities;
 
 import com.badlogic.gdx.math.Vector2;
+import com.github.thedragonconquerors.animation.PlayerAnimationController;
 import com.github.thedragonconquerors.movement.MovementController;
 import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.stats.StatCalculator;
 import com.shared.shared.model.stats.StatComponent;
-import lombok.Getter;
 
 public class Player {
-    //server side
     private final int ID;
-    @Getter
     private final String username;
-    @Getter
     private final CharacterClass characterClass;
-
-    @Getter
-    private final Vector2 position; //world-space position
-    @Getter
-    private final float speed;  //movement speed in world units per second
-
-    @Getter
+    private final Vector2 position;
+    private final float speed;
     private final StatComponent stats;
-    @Getter
     private final MovementController movementController;
+    private final PlayerAnimationController animationController;
 
-//    public Player(int ID, String username, float startX, float startY, CharacterClass characterClass, StatComponent stats)
-//    {
-//        this.ID = ID;
-//        this.username = username;
-//        this.characterClass = characterClass;
-//
-//        this.stats = stats;
-//        this.position = new Vector2(startX, startY);
-//        this.speed = 5f;
-//
-//        //max movement distance per turn derived from speed stat
-//        float maxDistance = StatCalculator.deriveMaxMovementDistance(stats);
-//        this.movementController = new MovementController(maxDistance);
-//    }
-    public Player(int ID, String username, Vector2 position, CharacterClass characterClass)
-    {
+    public Player(int ID, String username, Vector2 position, CharacterClass characterClass) {
         this.ID = ID;
         this.username = username;
         this.characterClass = characterClass;
-
-        this.stats = characterClass.getBaseStats();
-        this.position = position;
+        this.stats = characterClass.createStats();
+        this.position = new Vector2(position);
         this.speed = 5f;
 
-        //max movement distance per turn derived from speed stat
-        float maxDistance = StatCalculator.deriveMaxMovementDistance(characterClass.getBaseStats());
+        float maxDistance = StatCalculator.deriveMaxMovementDistance(stats);
         this.movementController = new MovementController(maxDistance);
+        this.animationController = new PlayerAnimationController();
     }
 
-//    public Player(int ID, String username, Vector2 startingPosition)
-//    {
-//        this.ID = ID;
-//        this.username = username;
-//        this.position = new Vector2(startingPosition);
-//        this.characterClass = CharacterClass.WARRIOR;
-//        this.stats = StatComponent.defaultStats();
-//        this.speed = 5f;
-//
-//        //max movement distance per turn derived from speed stat
-//        float maxDistance = StatCalculator.deriveMaxMovementDistance(stats);
-//        this.movementController = new MovementController(maxDistance);
-//    }
+    public int getID() { return ID; }
 
-    public void onTurnStart(){
+    public String getUsername() { return username; }
+
+    public CharacterClass getCharacterClass() { return characterClass; }
+
+    public Vector2 getPosition() { return position; }
+
+    public float getSpeed() { return speed; }
+
+    public StatComponent getStats() { return stats; }
+
+    public MovementController getMovementController() { return movementController; }
+
+    public PlayerAnimationController getAnimationController() { return animationController; }
+
+    public void onTurnStart() {
         movementController.resetForNewTurn();
         stats.regenerateMana(StatCalculator.manaRegenPerTurn(stats));
     }
 
-    public void setPosition(float x, float y){
+    public void setPosition(float x, float y) {
         position.set(x, y);
     }
-
 }

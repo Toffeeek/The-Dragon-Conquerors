@@ -11,6 +11,7 @@ import com.shared.shared.model.CharacterClass;
  *   baseDamage   — raw damage before stat scaling
  *   range        — max world-unit distance to target
  *   targetsSelf  — true for heals/buffs (no enemy needed)
+ *   animation    — sprite-sheet animation triggered by the action
  *   description  — tooltip line shown on the HUD
  *
  * Adding a new action:
@@ -22,33 +23,33 @@ public enum ActionType {
 
     // ── universal ──────────────────────────────────────────────────────────
     //                     name            mana  dmg  range  self   description
-    BASIC_ATTACK       ("Basic Attack",     0,   10,  1.5f, false, "Strike a nearby enemy"),
-    DEFEND             ("Defend",           0,    0,  0f,   true,  "Brace — reduce incoming damage this turn"),
+    BASIC_ATTACK       ("Basic Attack",     0,   10,  1.5f, false, ActionAnimation.ATTACK, "Strike a nearby enemy"),
+    DEFEND             ("Defend",           0,    0,  0f,   true,  ActionAnimation.CAST, "Brace — reduce incoming damage this turn"),
 
     // ── Warrior ───────────────────────────────────────────────────────────
-    SHIELD_BASH        ("Shield Bash",      8,   14,  1.5f, false, "Bash enemy — deals bonus damage"),
-    WAR_CRY            ("War Cry",         12,    0,  0f,   true,  "Boost strength for 1 turn"),
-    CLEAVE             ("Cleave",          15,   20,  2.0f, false, "Wide swing hitting all nearby enemies"),
+    SHIELD_BASH        ("Shield Bash",      8,   14,  1.5f, false, ActionAnimation.ATTACK, "Bash enemy — deals bonus damage"),
+    WAR_CRY            ("War Cry",         12,    0,  0f,   true,  ActionAnimation.CAST, "Boost strength for 1 turn"),
+    CLEAVE             ("Cleave",          15,   20,  2.0f, false, ActionAnimation.ATTACK, "Wide swing hitting all nearby enemies"),
 
     // ── Mage ──────────────────────────────────────────────────────────────
-    FIREBALL           ("Fireball",        20,   30,  5.0f, false, "Launch a fireball at a distant enemy"),
-    ICE_SHARD          ("Ice Shard",       12,   18,  4.0f, false, "Slow and damage a target"),
-    ARCANE_SHIELD      ("Arcane Shield",   15,    0,  0f,   true,  "Absorb the next hit with a mana barrier"),
+    FIREBALL           ("Fireball",        20,   30,  5.0f, false, ActionAnimation.CAST, "Launch a fireball at a distant enemy"),
+    ICE_SHARD          ("Ice Shard",       12,   18,  4.0f, false, ActionAnimation.CAST, "Slow and damage a target"),
+    ARCANE_SHIELD      ("Arcane Shield",   15,    0,  0f,   true,  ActionAnimation.CAST, "Absorb the next hit with a mana barrier"),
 
     // ── Archer ────────────────────────────────────────────────────────────
-    ARROW_SHOT         ("Arrow Shot",       5,   15,  6.0f, false, "Fire an arrow at a distant enemy"),
-    POISON_ARROW       ("Poison Arrow",    10,   10,  5.0f, false, "Arrow that poisons target over time"),
-    EVASIVE_ROLL       ("Evasive Roll",     8,    0,  0f,   true,  "Greatly boost evasion for 1 turn"),
+    ARROW_SHOT         ("Arrow Shot",       5,   15,  6.0f, false, ActionAnimation.ATTACK, "Fire an arrow at a distant enemy"),
+    POISON_ARROW       ("Poison Arrow",    10,   10,  5.0f, false, ActionAnimation.ATTACK, "Arrow that poisons target over time"),
+    EVASIVE_ROLL       ("Evasive Roll",     8,    0,  0f,   true,  ActionAnimation.CAST, "Greatly boost evasion for 1 turn"),
 
     // ── Paladin ───────────────────────────────────────────────────────────
-    HOLY_STRIKE        ("Holy Strike",     10,   18,  1.5f, false, "Blessed strike — bonus vs undead"),
-    LAY_ON_HANDS       ("Lay on Hands",   20,    0,  0f,   true,  "Restore 30 HP to yourself"),
-    DIVINE_SHIELD      ("Divine Shield",  25,    0,  0f,   true,  "Become immune to damage for 1 turn"),
+    HOLY_STRIKE        ("Holy Strike",     10,   18,  1.5f, false, ActionAnimation.ATTACK, "Blessed strike — bonus vs undead"),
+    LAY_ON_HANDS       ("Lay on Hands",   20,    0,  0f,   true,  ActionAnimation.CAST, "Restore 30 HP to yourself"),
+    DIVINE_SHIELD      ("Divine Shield",  25,    0,  0f,   true,  ActionAnimation.CAST, "Become immune to damage for 1 turn"),
 
     // ── Rogue ─────────────────────────────────────────────────────────────
-    BACKSTAB           ("Backstab",        10,   25,  1.5f, false, "High damage if attacking from behind"),
-    SMOKE_BOMB         ("Smoke Bomb",      12,    0,  0f,   true,  "Become untargetable for 1 turn"),
-    DUAL_SLASH         ("Dual Slash",      15,   18,  1.5f, false, "Two quick strikes in succession");
+    BACKSTAB           ("Backstab",        10,   25,  1.5f, false, ActionAnimation.ATTACK, "High damage if attacking from behind"),
+    SMOKE_BOMB         ("Smoke Bomb",      12,    0,  0f,   true,  ActionAnimation.CAST, "Become untargetable for 1 turn"),
+    DUAL_SLASH         ("Dual Slash",      15,   18,  1.5f, false, ActionAnimation.ATTACK, "Two quick strikes in succession");
 
     // ──────────────────────────────────────────────────────────────────────
     //  Fields
@@ -59,15 +60,17 @@ public enum ActionType {
     public final int     baseDamage;
     public final float   range;
     public final boolean targetsSelf;
+    public final ActionAnimation animation;
     public final String  description;
 
     ActionType(String displayName, int manaCost, int baseDamage,
-               float range, boolean targetsSelf, String description) {
+               float range, boolean targetsSelf, ActionAnimation animation, String description) {
         this.displayName  = displayName;
         this.manaCost     = manaCost;
         this.baseDamage   = baseDamage;
         this.range        = range;
         this.targetsSelf  = targetsSelf;
+        this.animation    = animation;
         this.description  = description;
     }
 

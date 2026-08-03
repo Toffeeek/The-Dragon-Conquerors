@@ -10,44 +10,50 @@ import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.movement.MovementSystem;
 
 import java.util.function.Consumer;
+import java.util.function.Function;
 
+/** Handles world clicks for target selection first, then movement. */
 public class MouseInputHandler extends InputAdapter {
     private final OrthographicCamera camera;
     private final Viewport viewport;
     private final Player player;
     private final MovementSystem movementSystem;
-
-    private final Consumer<Vector2> onMoveCallBack;
-
-    private final Vector3 unprojectScratch = new Vector3(); //reusable unproject vector
+    private final Function<Vector2, Boolean> onWorldClick;
+    private final Consumer<Vector2> onMoveCallback;
+    private final Vector3 unprojectScratch = new Vector3();
     private boolean isLocalPlayerTurn = true;
 
-    public MouseInputHandler(OrthographicCamera camera, Viewport viewport, Player player, MovementSystem movementSystem, Consumer<Vector2> onMoveCallBack) {
+    public MouseInputHandler(OrthographicCamera camera, Viewport viewport,
+                             Player player, MovementSystem movementSystem,
+                             Function<Vector2, Boolean> onWorldClick,
+                             Consumer<Vector2> onMoveCallback) {
         this.camera = camera;
         this.viewport = viewport;
         this.player = player;
         this.movementSystem = movementSystem;
-        this.onMoveCallBack = onMoveCallBack;
+        this.onWorldClick = onWorldClick;
+        this.onMoveCallback = onMoveCallback;
     }
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
-        if(!isLocalPlayerTurn)  return false;
-        if(button != Input.Buttons.LEFT)    return false;
+        if (!isLocalPlayerTurn || button != Input.Buttons.LEFT) return false;
 
-        //convert screen pixels to world coordinates
-        unprojectScratch.set(screenX, screenY, 0);
-        camera.unproject(unprojectScratch, viewport.getScreenX(), viewport.getScreenY(), viewport.getScreenWidth(), viewport.getScreenHeight());
+        unprojectScratch.set(screenX, screenY, 0f);
+        camera.unproject(unprojectScratch,
+            viewport.getScreenX(), viewport.getScreenY(),
+            viewport.getScreenWidth(), viewport.getScreenHeight());
 
-        Vector2 clickedWorldPos = new Vector2(unprojectScratch.x, unprojectScratch.y);
+        Vector2 clickedWorldPosition = new Vector2(unprojectScratch.x, unprojectScratch.y);
 
-        // Run A* and store path in MovementController
-        movementSystem.setDestination(player, clickedWorldPos);
+        // Target-selection mode consumes the click so it never also becomes movement.
+        if (onWorldClick != null && Boolean.TRUE.equals(onWorldClick.apply(clickedWorldPosition))) {
+            return true;
+        }
 
-        // Send final waypoint to server
+        movementSystem.setDestination(player, clickedWorldPosition);
         Vector2 target = player.getMovementController().getTargetPosition();
-        if (target != null) onMoveCallBack.accept(target);
-
+        if (target != null && onMoveCallback != null) onMoveCallback.accept(target);
         return true;
     }
 

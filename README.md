@@ -31,3 +31,19 @@ Useful Gradle tasks and flags:
 
 Note that most tasks that are not specific to a single project can be run with `name:` prefix, where the `name` should be replaced with the ID of a specific project.
 For example, `core:clean` removes `build` folder only from the `core` project.
+
+## Character animation and combat targeting
+
+Each playable class now has its own 48x48-frame sprite sheet with idle, walking,
+attack, cast, hurt, and death animations in four directions. The exact sheet layout
+is documented in [`docs/SPRITE_SHEETS.md`](docs/SPRITE_SHEETS.md).
+
+Combat controls:
+
+- Press `1`-`4` to choose an action.
+- Self-targeted actions execute immediately.
+- Enemy-targeted actions show a persistent selection prompt.
+- Left-click a highlighted player to use the action on that player.
+- Green targets are in range; red targets are outside the action's range.
+- Press `Esc` to cancel target selection.
+- While target selection is active, clicks are consumed by targeting and do not move the player.

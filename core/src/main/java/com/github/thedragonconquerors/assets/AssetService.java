@@ -15,30 +15,42 @@ public class AssetService implements Disposable {
         this.assetManager.setLoader(TiledMap.class, new TmxMapLoader(fileHandleResolver));
     }
 
-    public <T> T load(Asset<T> asset){
-        this.assetManager.load(asset.getDescriptor());
-        this.assetManager.finishLoading();
+    public <T> T load(Asset<T> asset) {
+        if (!isLoaded(asset)) {
+            this.assetManager.load(asset.getDescriptor());
+            this.assetManager.finishLoadingAsset(asset.getDescriptor().fileName);
+        }
         return this.assetManager.get(asset.getDescriptor());
     }
 
-    public <T> void queue(Asset<T> asset){
-        this.assetManager.load(asset.getDescriptor());
+    public <T> void queue(Asset<T> asset) {
+        if (!isLoaded(asset)) this.assetManager.load(asset.getDescriptor());
     }
 
-    public <T> T get(Asset<T> asset){
+    public <T> T get(Asset<T> asset) {
         return this.assetManager.get(asset.getDescriptor());
     }
 
-    public boolean update(){
+    public <T> T tryGet(Asset<T> asset) {
+        if (asset == null || !isLoaded(asset)) return null;
+        return this.assetManager.get(asset.getDescriptor());
+    }
+
+    public <T> boolean isLoaded(Asset<T> asset) {
+        return asset != null && this.assetManager.isLoaded(
+            asset.getDescriptor().fileName, asset.getDescriptor().type);
+    }
+
+    public boolean update() {
         return this.assetManager.update();
     }
 
-    public void debugDiagnostic(){
+    public void debugDiagnostic() {
         Gdx.app.debug("Asset Service", this.assetManager.getDiagnostics());
     }
 
     @Override
-    public void dispose(){
+    public void dispose() {
         this.assetManager.dispose();
     }
 }

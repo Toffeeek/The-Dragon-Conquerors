@@ -11,7 +11,6 @@ import com.github.thedragonconquerors.combat.ActionResult;
 import com.github.thedragonconquerors.combat.ActionType;
 import com.github.thedragonconquerors.entities.Player;
 import com.shared.shared.model.stats.StatComponent;
-import lombok.Setter;
 
 public class HudRenderer implements Disposable {
 
@@ -56,8 +55,10 @@ public class HudRenderer implements Disposable {
     private float   feedbackTimer     = 0f;
     private static final float FEEDBACK_DURATION = 2.5f;
 
+    // Persistent while a targeted action is waiting for a mouse click.
+    private String targetingPrompt = "";
+
     // ── action selection ──────────────────────────────────────────
-    @Setter
     private int selectedActionIndex = 0;
 
     public HudRenderer(Viewport viewport) {
@@ -81,6 +82,19 @@ public class HudRenderer implements Disposable {
     public void showFeedback(String message) {
         this.feedbackMessage = message;
         this.feedbackTimer   = FEEDBACK_DURATION;
+    }
+
+    public void setSelectedActionIndex(int selectedActionIndex) {
+        this.selectedActionIndex = selectedActionIndex;
+    }
+
+    public void showTargetingPrompt(ActionType action) {
+        this.targetingPrompt = "Select a player for " + action.displayName
+            + " — green is in range, red is out of range  [ESC to cancel]";
+    }
+
+    public void clearTargetingPrompt() {
+        this.targetingPrompt = "";
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -187,12 +201,20 @@ public class HudRenderer implements Disposable {
             font.draw(hudBatch, cost, sx + 4f, SLOT_Y + 14f);
         }
 
+        // target-selection prompt remains visible until a player is clicked or ESC is pressed
+        if (!targetingPrompt.isEmpty()) {
+            font.setColor(ACTION_SELECTED);
+            font.draw(hudBatch, targetingPrompt,
+                Math.max(20f, (sw - targetingPrompt.length() * 7f) / 2f), sh - 28f);
+        }
+
         // feedback message (fades out)
         if (feedbackTimer > 0f) {
             font.setColor(FEEDBACK_COLOR.r, FEEDBACK_COLOR.g, FEEDBACK_COLOR.b,
                 Math.min(1f, feedbackTimer));
+            float feedbackY = targetingPrompt.isEmpty() ? sh - 30f : sh - 52f;
             font.draw(hudBatch, feedbackMessage,
-                (sw - feedbackMessage.length() * 7f) / 2f, sh - 30f);
+                Math.max(20f, (sw - feedbackMessage.length() * 7f) / 2f), feedbackY);
         }
 
         font.setColor(TEXT_COLOR);
