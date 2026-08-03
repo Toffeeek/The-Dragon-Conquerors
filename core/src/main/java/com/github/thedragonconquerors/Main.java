@@ -118,6 +118,26 @@ public class Main extends Game
         setScreen(GameOneScreen.class);
     }
 
+    /** Disconnects the current client, stops a locally hosted server, and returns to the cached menu. */
+    public void returnToMenu()
+    {
+        if(networkClient != null)
+        {
+            try
+            {
+                networkClient.disconnect();
+            }
+            finally
+            {
+                networkClient = null;
+            }
+        }
+
+        stopLocalServer();
+        hostedJoinUrl = DEFAULT_SERVER_URL;
+        setScreen(MenuScreen.class);
+    }
+
     public boolean startLocalServer() throws IOException
     {
         if(serverProcess != null && serverProcess.isAlive()) return false;
@@ -328,7 +348,11 @@ public class Main extends Game
     }
 
     public void addScreen(Screen screen){
-        screenCache.put(screen.getClass(), screen);
+        Screen previous = screenCache.put(screen.getClass(), screen);
+        if(previous != null && previous != screen)
+        {
+            previous.dispose();
+        }
     }
 
     public void setScreen(Class<? extends Screen> screenClass){
