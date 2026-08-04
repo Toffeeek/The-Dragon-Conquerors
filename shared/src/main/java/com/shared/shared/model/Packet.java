@@ -12,17 +12,23 @@ import java.util.ArrayList;
 @Builder
 public class Packet
 {
+    @Builder.Default
     private int ID = -1;
+    @Builder.Default
     private int activePlayerID = -1;
     private String username;
     private Vector2 finalPosition;
     private Action action;
     private CharacterClass characterClass;
 
+    @Builder.Default
     private int deltaHealth = 0;
 //    private int deltaMana = 0;
 
+    @Builder.Default
     private ArrayList<Integer> affectedPlayersId = new ArrayList<Integer>();
+    @Builder.Default
+    private ArrayList<Integer> killedPlayersId = new ArrayList<Integer>();
 
 
     Packet(int ID, Vector2 finalPosition, Action action, int activePlayerID)

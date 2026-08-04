@@ -190,16 +190,80 @@ public class GameOneScreen extends ScreenAdapter {
 
     private void processAttack(Packet p)
     {
-        var affectedPlayersId = p.getAffectedPlayersId();
-        var dealerCharacterClass = p.getCharacterClass();
-        var deltaHealth = p.getDeltaHealth();
-
-
-        if(!p.getAffectedPlayersId().contains(localPlayerId))
+        if (p.getID() == localPlayerId)
             return;
 
+        var affectedPlayersId = p.getAffectedPlayersId();
+        if (affectedPlayersId == null || affectedPlayersId.isEmpty())
+            return;
 
+        Player dealer = playerById(p.getID());
+        Player firstAffectedPlayer = null;
+        for (Integer affectedPlayerId : affectedPlayersId) {
+            firstAffectedPlayer = playerById(affectedPlayerId);
+            if (firstAffectedPlayer != null) break;
+        }
 
+        ActionType action = actionTypeFromPacket(p);
+        if (dealer != null && firstAffectedPlayer != null) {
+            dealer.getAnimationController().playAttack(
+                dealer.getPosition(), firstAffectedPlayer.getPosition(),
+                action.animation == ActionAnimation.CAST);
+        }
+
+        var deltaHealth = p.getDeltaHealth();
+        var killedPlayersId = p.getKilledPlayersId();
+
+        for (Integer affectedPlayerId : affectedPlayersId) {
+            Player affectedPlayer = playerById(affectedPlayerId);
+            if (affectedPlayer == null) continue;
+
+            if (deltaHealth < 0) {
+                affectedPlayer.getStats().applyDamage(-deltaHealth);
+            } else if (deltaHealth > 0) {
+                affectedPlayer.getStats().heal(deltaHealth);
+            }
+
+            boolean killed = killedPlayersId != null && killedPlayersId.contains(affectedPlayerId);
+            if (killed || affectedPlayer.getStats().getHp() <= 0) {
+                affectedPlayer.getStats().setHp(0);
+                affectedPlayer.getAnimationController().playDeath();
+            } else if (deltaHealth < 0 && dealer != null) {
+                affectedPlayer.getAnimationController().playHurt(
+                    dealer.getPosition(), affectedPlayer.getPosition());
+            }
+        }
+    }
+
+    private Player playerById(int playerId) {
+        if (playerId == localPlayerId) return localPlayer;
+        return playersById.get(playerId);
+    }
+
+    private ActionType actionTypeFromPacket(Packet packet) {
+        CharacterClass characterClass = packet.getCharacterClass() == null
+            ? CharacterClass.WARRIOR : packet.getCharacterClass();
+        ActionType[] actions = ActionType.availableFor(characterClass);
+        int actionIndex;
+
+        switch (packet.getAction()) {
+            case SECONDARY:
+                actionIndex = 1;
+                break;
+            case TERTIARY:
+                actionIndex = 2;
+                break;
+            case ULTIMATE:
+                actionIndex = 3;
+                break;
+            case PRIMARY:
+            default:
+                actionIndex = 0;
+                break;
+        }
+
+        if (actionIndex >= actions.length) return actions[0];
+        return actions[actionIndex];
     }
 
     private void receiveJoin(Packet packet) {
@@ -403,6 +467,7 @@ public class GameOneScreen extends ScreenAdapter {
 
             if (selectedTarget.getStats().getHp() <= 0)
             {
+                packet.getKilledPlayersId().add(selectedTarget.getID());
                 selectedTarget.getAnimationController().playDeath();
             }
             else

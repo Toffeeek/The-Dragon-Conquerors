@@ -3,6 +3,7 @@ package com.server.server.server;
 
 
 import com.badlogic.gdx.math.Vector2;
+import com.github.thedragonconquerors.entities.Player;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
@@ -32,6 +33,9 @@ public class GameController
 
     // ID : {username, (x,y)}
     private Map<Integer, Pair<String, Vector2>> playerCoordinates = new HashMap<>();
+
+    // ID : Player Object
+    private Map<Integer, Player> players = new HashMap<>();
     private ArrayList<CharacterClass> playerClasses = new ArrayList<>();
 
 
@@ -41,9 +45,17 @@ public class GameController
     {
         playerCoordinates.put(p.getID(), new Pair<>(p.getUsername(), p.getFinalPosition()));
 
+        if(p.getAction() == Action.PRIMARY ||
+            p.getAction() == Action.SECONDARY ||
+            p.getAction() == Action.ULTIMATE)
+        {
+            var killedPlayersId = new ArrayList<>(p.getKilledPlayersId());
+        }
+
         if(p.getAction() == Action.END_TURN)
         {
             activePlayerId = (activePlayerId + 1) % totalPlayers;
+
         }
         p.setActivePlayerID(activePlayerId);
 
@@ -65,7 +77,11 @@ public class GameController
         String sessionId = headerAccessor.getSessionId();
 
         p.setID(assignedID);
-        Packet privateP = Packet.builder().ID(assignedID).action(Action.PRIVATE_JOIN_CONFIRMATION).build();
+        Packet privateP = Packet.builder()
+            .ID(assignedID)
+            .activePlayerID(activePlayerId)
+            .action(Action.PRIVATE_JOIN_CONFIRMATION)
+            .build();
         headerAccessor.getSessionAttributes().put("ID", assignedID);
 
         messageTemplate.convertAndSendToUser
