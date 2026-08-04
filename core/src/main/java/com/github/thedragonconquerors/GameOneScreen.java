@@ -190,9 +190,10 @@ public class GameOneScreen extends ScreenAdapter {
 
     private void processAttack(Packet p)
     {
+        var affectedPlayersId = p.getAffectedPlayersId();
         var dealerCharacterClass = p.getCharacterClass();
         var deltaHealth = p.getDeltaHealth();
-        
+
 
         if(!p.getAffectedPlayersId().contains(localPlayerId))
             return;
@@ -384,39 +385,38 @@ public class GameOneScreen extends ScreenAdapter {
         }
 
 
+        ArrayList<Integer> affectedPlayers = new ArrayList<>();
+        affectedPlayers.add(selectedTarget.getID());
+
+        Packet packet = Packet.builder()
+            .ID(localPlayerId)
+            .affectedPlayersId(affectedPlayers)
+            .characterClass(localPlayer.getCharacterClass())
+            .action(attack)
+            .build();
 
         if (result.outcome == ActionResult.Outcome.HIT)
         {
-            ArrayList<Integer> affectedPlayers = new ArrayList<>();
-            affectedPlayers.add(selectedTarget.getID());
+
+            packet.setDeltaHealth(result.healingDone - result.damageDealt);
+
 
             if (selectedTarget.getStats().getHp() <= 0)
             {
                 selectedTarget.getAnimationController().playDeath();
-
-                Packet packet = Packet.builder()
-                    .ID(localPlayerId)
-                    .affectedPlayersId(affectedPlayers)
-                    .characterClass(localPlayer.getCharacterClass())
-                    .deltaHealth(Integer.MAX_VALUE)
-                    .action(attack)
-                    .build();
-                networkClient.send(packet);
             }
             else
             {
                 selectedTarget.getAnimationController().playHurt(
                     localPlayer.getPosition(), selectedTarget.getPosition());
-                Packet packet = Packet.builder()
-                    .ID(localPlayerId)
-                    .affectedPlayersId(affectedPlayers)
-                    .deltaHealth(result.healingDone - result.damageDealt)
-                    .characterClass(localPlayer.getCharacterClass())
-                    .action(attack)
-                    .build();
-                networkClient.send(packet);
             }
         }
+        else
+        {
+            packet.setDeltaHealth(result.healingDone - result.damageDealt);
+        }
+
+        networkClient.send(packet);
 
         hudRenderer.showFeedback("Target: " + selectedTarget.getUsername()
             + " — " + result.message);
