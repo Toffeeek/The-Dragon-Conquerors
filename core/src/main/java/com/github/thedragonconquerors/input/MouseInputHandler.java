@@ -9,6 +9,7 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.movement.MovementSystem;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -20,24 +21,28 @@ public class MouseInputHandler extends InputAdapter {
     private final MovementSystem movementSystem;
     private final Function<Vector2, Boolean> onWorldClick;
     private final Consumer<Vector2> onMoveCallback;
+    private final BooleanSupplier localPlayerActiveCheck;
     private final Vector3 unprojectScratch = new Vector3();
     private boolean isLocalPlayerTurn = true;
 
     public MouseInputHandler(OrthographicCamera camera, Viewport viewport,
                              Player player, MovementSystem movementSystem,
                              Function<Vector2, Boolean> onWorldClick,
-                             Consumer<Vector2> onMoveCallback) {
+                             Consumer<Vector2> onMoveCallback,
+                             BooleanSupplier localPlayerActiveCheck) {
         this.camera = camera;
         this.viewport = viewport;
         this.player = player;
         this.movementSystem = movementSystem;
         this.onWorldClick = onWorldClick;
         this.onMoveCallback = onMoveCallback;
+        this.localPlayerActiveCheck = localPlayerActiveCheck;
     }
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
         if (!isLocalPlayerTurn || button != Input.Buttons.LEFT) return false;
+        if (localPlayerActiveCheck != null && !localPlayerActiveCheck.getAsBoolean()) return false;
 
         unprojectScratch.set(screenX, screenY, 0f);
         camera.unproject(unprojectScratch,

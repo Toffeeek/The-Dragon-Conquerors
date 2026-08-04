@@ -48,6 +48,7 @@ public class GameOneScreen extends ScreenAdapter {
     private MovementSystem movementSystem;
     private NavGrid navGrid;
     private Player localPlayer;
+    private int activePlayerId = -1;
     private final ArrayList<Player> enemyPlayers = new ArrayList<>();
     private final Map<Integer, Player> playersById = new HashMap<>();
     private int localPlayerId = -1;
@@ -102,7 +103,7 @@ public class GameOneScreen extends ScreenAdapter {
         hudRenderer.setJoinUrl(game.getHostedJoinUrl());
         mouseInputHandler = new MouseInputHandler(
             camera, viewport, localPlayer, movementSystem,
-            this::handleWorldClick, this::sendLocalMove);
+            this::handleWorldClick, this::sendLocalMove, this::localPlayerIsActive);
         Gdx.input.setInputProcessor(mouseInputHandler);
     }
 
@@ -114,12 +115,20 @@ public class GameOneScreen extends ScreenAdapter {
         localPlayer = new Player(-1, username, startingPosition, characterClass);
     }
 
+    private boolean localPlayerIsActive()
+    {
+        return activePlayerId == localPlayerId;
+    }
+
     @Override
     public void render(float delta) {
         movementSystem.update(localPlayer, delta);
         for (Player enemy : enemyPlayers) movementSystem.update(enemy, delta);
 
-        if (Gdx.input.isKeyJustPressed(Input.Keys.E)) endTurn();
+        if (Gdx.input.isKeyJustPressed(Input.Keys.E) && localPlayerIsActive())
+        {
+            endTurn();
+        }
         handleActionKeys();
 
         ScreenUtils.clear(Color.BLACK);
@@ -143,7 +152,8 @@ public class GameOneScreen extends ScreenAdapter {
         switch (packet.getAction()) {
             case PRIVATE_JOIN_CONFIRMATION:
                 localPlayerId = packet.getID();
-                System.out.println("My player ID is " + localPlayerId);
+                this.activePlayerId = packet.getActivePlayerID();
+                System.out.println("My player ID is " + localPlayerId + " Current Active Player: " + activePlayerId);
                 break;
             case PLAYER_COORDINATE:
                 receiveExistingPlayer(packet);
@@ -158,6 +168,11 @@ public class GameOneScreen extends ScreenAdapter {
                 break;
             case MOVE:
                 if (packet.getID() != localPlayerId) moveEnemyPlayer(packet);
+                break;
+            case END_TURN:
+                System.out.println(activePlayerId + " has ended their turn");
+                this.activePlayerId = packet.getActivePlayerID();
+                System.out.println(activePlayerId + " is the new active player");
                 break;
             case LEAVE:
                 removeEnemyPlayer(packet.getID());
@@ -240,6 +255,13 @@ public class GameOneScreen extends ScreenAdapter {
     }
 
     private void handleActionKeys() {
+
+        if(!localPlayerIsActive())
+        {
+//            System.out.println("WAIT FO YO TURN FOO");
+            return;
+        }
+
         if (availableActions == null) return;
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) && pendingTargetAction != null) {
@@ -380,7 +402,15 @@ public class GameOneScreen extends ScreenAdapter {
     private void endTurn() {
         cancelTargetSelection(false);
         localPlayer.onTurnStart();
+
+        Packet packet = Packet.builder()
+            .ID(localPlayerId)
+            .action(Action.END_TURN)
+            .build();
+        networkClient.send(packet);
+
         System.out.println("Turn ended — movement distance reset.");
+
     }
 
     @Override
