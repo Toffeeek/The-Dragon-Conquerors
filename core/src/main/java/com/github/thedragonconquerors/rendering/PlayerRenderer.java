@@ -18,6 +18,7 @@ import com.shared.shared.model.CharacterClass;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /** Renders class-specific animated sprite sheets plus movement and target overlays. */
 public class PlayerRenderer implements Disposable {
@@ -45,13 +46,15 @@ public class PlayerRenderer implements Disposable {
     private final AssetService assetService;
     private final Map<CharacterClass, TextureRegion[][]> sheetCache = new EnumMap<>(CharacterClass.class);
 
+    private final BooleanSupplier localPlayerActiveCheck;
     private List<Vector2> cachedReachable;
     private float lastRemainingDistance = -1f;
     private float pulseTime = 0f;
 
-    public PlayerRenderer(AssetService assetService, Batch spriteBatch) {
+    public PlayerRenderer(AssetService assetService, Batch spriteBatch, BooleanSupplier localPlayerActiveCheck) {
         this.assetService = assetService;
         this.spriteBatch = spriteBatch;
+        this.localPlayerActiveCheck = localPlayerActiveCheck;
     }
 
     public void renderLocal(Player player, Matrix4 projection, NavGrid navGrid, float delta) {
@@ -88,7 +91,7 @@ public class PlayerRenderer implements Disposable {
     }
 
     private void drawReachable(Matrix4 projection) {
-        if (cachedReachable == null) return;
+        if (cachedReachable == null || !localPlayerActiveCheck.getAsBoolean()) return;
         shapeRenderer.setProjectionMatrix(projection);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(COLOR_REACHABLE);
