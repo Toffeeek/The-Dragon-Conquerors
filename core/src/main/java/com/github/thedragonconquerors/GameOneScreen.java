@@ -169,6 +169,12 @@ public class GameOneScreen extends ScreenAdapter {
             case MOVE:
                 if (packet.getID() != localPlayerId) moveEnemyPlayer(packet);
                 break;
+            case PRIMARY:
+            case SECONDARY:
+            case TERTIARY:
+            case ULTIMATE:
+                processAttack(packet);
+                break;
             case END_TURN:
                 System.out.println(activePlayerId + " has ended their turn");
                 this.activePlayerId = packet.getActivePlayerID();
@@ -180,6 +186,19 @@ public class GameOneScreen extends ScreenAdapter {
             default:
                 break;
         }
+    }
+
+    private void processAttack(Packet p)
+    {
+        var dealerCharacterClass = p.getCharacterClass();
+        var deltaHealth = p.getDeltaHealth();
+        
+
+        if(!p.getAffectedPlayersId().contains(localPlayerId))
+            return;
+
+
+
     }
 
     private void receiveJoin(Packet packet) {
@@ -279,8 +298,8 @@ public class GameOneScreen extends ScreenAdapter {
         for (int i = 0; i < keys.length && i < availableActions.length; i++) {
             if (!Gdx.input.isKeyJustPressed(keys[i])) continue;
             selectedActionIndex = i;
-            hudRenderer.setSelectedActionIndex(i);
-            selectAction(availableActions[i]);
+            hudRenderer.setSelectedActionIndex(selectedActionIndex);
+            selectAction(availableActions[selectedActionIndex]);
             return;
         }
     }
@@ -344,18 +363,58 @@ public class GameOneScreen extends ScreenAdapter {
         ActionResult result = actionSystem.execute(localPlayer, selectedTarget, action);
 
         if (result.outcome == ActionResult.Outcome.HIT
-            || result.outcome == ActionResult.Outcome.MISS) {
+            || result.outcome == ActionResult.Outcome.MISS)
+        {
             localPlayer.getAnimationController().playAttack(
                 localPlayer.getPosition(), selectedTarget.getPosition(),
                 action.animation == ActionAnimation.CAST);
         }
 
-        if (result.outcome == ActionResult.Outcome.HIT) {
-            if (selectedTarget.getStats().getHp() <= 0) {
+        Action attack;
+        switch (selectedActionIndex)
+        {
+            case 0: attack = Action.PRIMARY;
+                break;
+            case 1: attack = Action.SECONDARY;
+                break;
+            case 2: attack = Action.TERTIARY;
+                break;
+            default: attack = Action.ULTIMATE;
+                break;
+        }
+
+
+
+        if (result.outcome == ActionResult.Outcome.HIT)
+        {
+            ArrayList<Integer> affectedPlayers = new ArrayList<>();
+            affectedPlayers.add(selectedTarget.getID());
+
+            if (selectedTarget.getStats().getHp() <= 0)
+            {
                 selectedTarget.getAnimationController().playDeath();
-            } else {
+
+                Packet packet = Packet.builder()
+                    .ID(localPlayerId)
+                    .affectedPlayersId(affectedPlayers)
+                    .characterClass(localPlayer.getCharacterClass())
+                    .deltaHealth(Integer.MAX_VALUE)
+                    .action(attack)
+                    .build();
+                networkClient.send(packet);
+            }
+            else
+            {
                 selectedTarget.getAnimationController().playHurt(
                     localPlayer.getPosition(), selectedTarget.getPosition());
+                Packet packet = Packet.builder()
+                    .ID(localPlayerId)
+                    .affectedPlayersId(affectedPlayers)
+                    .deltaHealth(result.healingDone - result.damageDealt)
+                    .characterClass(localPlayer.getCharacterClass())
+                    .action(attack)
+                    .build();
+                networkClient.send(packet);
             }
         }
 

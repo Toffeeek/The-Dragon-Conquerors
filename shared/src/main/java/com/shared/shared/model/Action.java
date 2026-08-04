@@ -7,6 +7,7 @@ public enum Action
     PRIVATE_JOIN_CONFIRMATION,
     PRIMARY,
     SECONDARY,
+    TERTIARY,
     ULTIMATE,
     MOVE,
     END_TURN,

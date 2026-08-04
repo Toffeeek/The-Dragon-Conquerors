@@ -3,6 +3,8 @@ package com.shared.shared.model;
 import com.badlogic.gdx.math.Vector2;
 import lombok.*;
 
+import java.util.ArrayList;
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -16,6 +18,12 @@ public class Packet
     private Vector2 finalPosition;
     private Action action;
     private CharacterClass characterClass;
+
+    private int deltaHealth = 0;
+//    private int deltaMana = 0;
+
+    private ArrayList<Integer> affectedPlayersId = new ArrayList<Integer>();
+
 
     Packet(int ID, Vector2 finalPosition, Action action, int activePlayerID)
     {
