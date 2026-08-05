@@ -51,13 +51,12 @@ public class GameOneScreen extends ScreenAdapter {
 
     private final Vector2 GAMEONE_BLUE_SPAWN = new Vector2(1f, 9f);
     private final Vector2 GAMEONE_RED_SPAWN = new Vector2(28f, 9f);
-//    private final CharacterClass chosenClass;
-//    private final int teamIndex;
+
     private Player localPlayer;
     private int activePlayerId = -1;
     private final ArrayList<Player> enemyPlayers = new ArrayList<>();
     private final Map<Integer, Player> playersById = new HashMap<>();
-//    private int localPlayerId = -1;
+
     private boolean receivingInitialPlayerList = false;
 
     private PlayerRenderer playerRenderer;
@@ -82,7 +81,7 @@ public class GameOneScreen extends ScreenAdapter {
         availableActions = ActionType.availableFor(chosenClass);
 
 
-        var startingPosition = team == TEAM.BLUE ? GAMEONE_BLUE_SPAWN : GAMEONE_RED_SPAWN;
+        Vector2 startingPosition = team == TEAM.BLUE ? GAMEONE_BLUE_SPAWN : GAMEONE_RED_SPAWN;
         localPlayer = new Player(-1, "default-username", team, startingPosition, chosenClass);
         spawnLocalPlayer(localPlayer);
     }
@@ -188,6 +187,7 @@ public class GameOneScreen extends ScreenAdapter {
                 System.out.println(activePlayerId + " is the new active player");
                 break;
             case LEAVE:
+                this.activePlayerId = packet.getActivePlayerID();
                 removeEnemyPlayer(packet.getPlayer().getID());
                 break;
             default:

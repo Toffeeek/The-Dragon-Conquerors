@@ -21,20 +21,22 @@ public class MovementSystem {
     private static final float ARRIVAL_THRESHOLD = 0.05f;   //minimum distance to target before snapping
     private NavGrid navGrid;
 
-    public void setDestination(Player player, Vector2 clickedWorldPos)
+    public boolean setDestination(Player player, Vector2 clickedWorldPos)
     {
-        if (navGrid == null) return;
+        if (navGrid == null) return false;
 
         float remaining = player.getMovementController().getRemainingMovementDistance();
         List<Vector2> path = navGrid.findPath(
             player.getPosition(), clickedWorldPos, remaining);
 
-        if (path.isEmpty()) return;
+        if (path.isEmpty()) return false;
 
         // Clamp path to remaining distance budget
         List<Vector2> clampedPath = clampPathToDistance(player.getPosition(), path, remaining);
+        if (clampedPath.isEmpty()) return false;
 
         player.getMovementController().setPath(clampedPath);
+        return true;
     }
 
     public void setNetworkDestination(Player player, Vector2 destination)

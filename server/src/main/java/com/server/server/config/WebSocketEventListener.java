@@ -6,6 +6,7 @@ package com.server.server.config;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.Packet;
 import com.shared.shared.model.PlayerState;
+import com.server.server.server.GameController;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -31,6 +32,7 @@ public class WebSocketEventListener
      * bean, similar to @Autowired but through the constructor.
      */
     private final SimpMessageSendingOperations messageTemplate;
+    private final GameController gameController;
 
     /**
      * Called automatically when Spring publishes a SessionDisconnectEvent.
@@ -68,9 +70,11 @@ public class WebSocketEventListener
         if(ID != -1)
         {
             log.info("User disconnected: {}", ID);
+            int activePlayerId = gameController.removePlayer(ID);
 
             var packet = Packet.builder()
                     .action(Action.LEAVE)
+                    .activePlayerID(activePlayerId)
                     .player(PlayerState.builder().ID(ID).build())
                     .build();
 

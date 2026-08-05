@@ -149,8 +149,8 @@ public class MenuScreen extends ScreenAdapter {
         });
 
         Label addressLabel = new Label("SERVER ADDRESS", skin, "section");
-        addressField = new TextField(Main.DEFAULT_SERVER_URL, skin);
-        addressField.setMessageText("192.168.1.10:8080");
+        addressField = new TextField("", skin);
+        addressField.setMessageText("Paste host address, e.g. ws://192.168.1.10:8080/ws");
 
         joinButton = new TextButton("JOIN CAMPAIGN", skin, "secondary");
         joinButton.addListener(new ClickListener() {

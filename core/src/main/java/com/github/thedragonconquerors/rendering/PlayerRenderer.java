@@ -32,7 +32,6 @@ public class PlayerRenderer implements Disposable {
     private static final float SPRITE_Y_OFFSET = -0.48f;
 
     private static final Color COLOR_PLAYER_RING = new Color(1f, 1f, 1f, 0.85f);
-    private static final Color COLOR_PATH = new Color(1f, 0.85f, 0.1f, 0.8f);
     private static final Color COLOR_STAMINA_BG = new Color(0.12f, 0.12f, 0.15f, 0.9f);
     private static final Color COLOR_STAMINA_FILL = new Color(0.1f, 0.9f, 0.3f, 1f);
     private static final Color COLOR_HP_BG = new Color(0.12f, 0.12f, 0.15f, 0.9f);
@@ -70,7 +69,6 @@ public class PlayerRenderer implements Disposable {
 
         drawReachable(projection);
         drawCharacter(player, projection);
-        drawPath(player, projection);
         drawBars(player, projection, true);
         drawRing(player, projection, COLOR_PLAYER_RING, 0.43f);
     }
@@ -156,21 +154,6 @@ public class PlayerRenderer implements Disposable {
         }
         sheetCache.put(characterClass, split);
         return split;
-    }
-
-    private void drawPath(Player player, Matrix4 projection) {
-        List<Vector2> path = player.getMovementController().getPath();
-        if (path == null || path.size() <= 1) return;
-
-        shapeRenderer.setProjectionMatrix(projection);
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        shapeRenderer.setColor(COLOR_PATH);
-        Vector2 previous = player.getPosition();
-        for (Vector2 waypoint : path) {
-            shapeRenderer.line(previous.x, previous.y, waypoint.x, waypoint.y);
-            previous = waypoint;
-        }
-        shapeRenderer.end();
     }
 
     private void drawBars(Player player, Matrix4 projection, boolean showStamina) {

@@ -8,6 +8,7 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.movement.MovementSystem;
+import lombok.Setter;
 
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -23,6 +24,7 @@ public class MouseInputHandler extends InputAdapter {
     private final Consumer<Vector2> onMoveCallback;
     private final BooleanSupplier localPlayerActiveCheck;
     private final Vector3 unprojectScratch = new Vector3();
+    @Setter
     private boolean isLocalPlayerTurn = true;
 
     public MouseInputHandler(OrthographicCamera camera, Viewport viewport,
@@ -56,13 +58,12 @@ public class MouseInputHandler extends InputAdapter {
             return true;
         }
 
-        movementSystem.setDestination(player, clickedWorldPosition);
+        if (!movementSystem.setDestination(player, clickedWorldPosition)) {
+            return true;
+        }
+
         Vector2 target = player.getMovementController().getTargetPosition();
         if (target != null && onMoveCallback != null) onMoveCallback.accept(target);
         return true;
-    }
-
-    public void setLocalPlayerTurn(boolean localPlayerTurn) {
-        this.isLocalPlayerTurn = localPlayerTurn;
     }
 }
