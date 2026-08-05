@@ -17,6 +17,7 @@ import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
 import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
+import com.shared.shared.model.TEAM;
 import lombok.Getter;
 
 import java.io.BufferedReader;
@@ -114,7 +115,18 @@ public class Main extends Game
 
     public void startGame(int teamIndex, CharacterClass chosenClass)
     {
-        addScreen(new GameOneScreen(this, teamIndex, chosenClass));
+        com.shared.shared.model.TEAM team;
+        switch(teamIndex)
+        {
+            case 1: team = TEAM.BLUE;
+                    break;
+            case 2: team = TEAM.RED;
+                break;
+            default: team = TEAM.UNASSIGNED;
+                break;
+        }
+
+        addScreen(new GameOneScreen(this, team, chosenClass));
         setScreen(GameOneScreen.class);
     }
 
@@ -328,7 +340,7 @@ public class Main extends Game
         switch(packet.getAction())
         {
             case PRIVATE_JOIN_CONFIRMATION:
-                System.out.println("My player ID is " + packet.getID());
+                System.out.println("My player ID is " + packet.getPlayer().getID());
                 break;
             case PLAYER_COORDINATE:
             case JOIN:

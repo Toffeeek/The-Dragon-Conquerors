@@ -19,6 +19,7 @@ import com.github.thedragonconquerors.combat.ActionResult;
 import com.github.thedragonconquerors.combat.ActionSystem;
 import com.github.thedragonconquerors.combat.ActionType;
 import com.github.thedragonconquerors.entities.Player;
+import com.github.thedragonconquerors.entities.PlayerConverter;
 import com.github.thedragonconquerors.input.MouseInputHandler;
 import com.github.thedragonconquerors.movement.MovementSystem;
 import com.github.thedragonconquerors.movement.NavGrid;
@@ -27,6 +28,8 @@ import com.github.thedragonconquerors.rendering.PlayerRenderer;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
+import com.shared.shared.model.TEAM;
+import com.shared.shared.model.PlayerState;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -41,17 +44,20 @@ public class GameOneScreen extends ScreenAdapter {
     private final Viewport viewport;
     private final OrthographicCamera camera;
     private final NetworkClient networkClient;
-    private final int teamIndex;
-    private final CharacterClass chosenClass;
 
     private OrthogonalTiledMapRenderer mapRenderer;
     private MovementSystem movementSystem;
     private NavGrid navGrid;
+
+    private final Vector2 GAMEONE_BLUE_SPAWN = new Vector2(1f, 9f);
+    private final Vector2 GAMEONE_RED_SPAWN = new Vector2(28f, 9f);
+//    private final CharacterClass chosenClass;
+//    private final int teamIndex;
     private Player localPlayer;
     private int activePlayerId = -1;
     private final ArrayList<Player> enemyPlayers = new ArrayList<>();
     private final Map<Integer, Player> playersById = new HashMap<>();
-    private int localPlayerId = -1;
+//    private int localPlayerId = -1;
     private boolean receivingInitialPlayerList = false;
 
     private PlayerRenderer playerRenderer;
@@ -62,17 +68,23 @@ public class GameOneScreen extends ScreenAdapter {
     private int selectedActionIndex = 0;
     private ActionType pendingTargetAction;
 
-    public GameOneScreen(Main game, int teamIndex, CharacterClass chosenClass) {
+    public GameOneScreen(Main game, TEAM team, CharacterClass chosenClass) {
         this.networkClient = game.getNetworkClient();
-        this.teamIndex = teamIndex;
-        this.chosenClass = chosenClass;
+
+
         this.game = game;
         this.assetService = game.getAssetService();
         this.viewport = game.getViewport();
         this.camera = game.getCamera();
         this.batch = game.getBatch();
-        this.networkClient.setPacketHandler(
-            packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
+        this.networkClient.setPacketHandler(packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
+
+        availableActions = ActionType.availableFor(chosenClass);
+
+
+        var startingPosition = team == TEAM.BLUE ? GAMEONE_BLUE_SPAWN : GAMEONE_RED_SPAWN;
+        localPlayer = new Player(-1, "default-username", team, startingPosition, chosenClass);
+        spawnLocalPlayer(localPlayer);
     }
 
     @Override
@@ -80,9 +92,6 @@ public class GameOneScreen extends ScreenAdapter {
         movementSystem = new MovementSystem();
         actionSystem = new ActionSystem();
 
-        float spawnX = teamIndex == 1 ? 1f : 28f;
-        spawnLocalPlayer("Name", spawnX, 9f, chosenClass);
-        availableActions = ActionType.availableFor(chosenClass);
 
         TiledMap map = assetService.load(MAIN);
         mapRenderer = new OrthogonalTiledMapRenderer(map, Main.UNIT_SCALE, batch);
@@ -107,17 +116,15 @@ public class GameOneScreen extends ScreenAdapter {
         Gdx.input.setInputProcessor(mouseInputHandler);
     }
 
-    private void spawnLocalPlayer(String username, float worldX, float worldY,
-                                  CharacterClass characterClass) {
+    private void spawnLocalPlayer(Player player)
+    {
         receivingInitialPlayerList = true;
-        Vector2 startingPosition = new Vector2(worldX, worldY);
-        networkClient.join("local-player", startingPosition, characterClass);
-        localPlayer = new Player(-1, username, startingPosition, characterClass);
+        networkClient.join(PlayerConverter.toPlayerState(player));
     }
 
     private boolean localPlayerIsActive()
     {
-        return activePlayerId == localPlayerId;
+        return activePlayerId == localPlayer.getID();
     }
 
     @Override
@@ -151,9 +158,9 @@ public class GameOneScreen extends ScreenAdapter {
     private void handlePacket(Packet packet) {
         switch (packet.getAction()) {
             case PRIVATE_JOIN_CONFIRMATION:
-                localPlayerId = packet.getID();
+                localPlayer.setID(packet.getPlayer().getID());
                 this.activePlayerId = packet.getActivePlayerID();
-                System.out.println("My player ID is " + localPlayerId + " Current Active Player: " + activePlayerId);
+                System.out.println("My player ID is " + localPlayer.getID() + " Current Active Player: " + activePlayerId);
                 break;
             case PLAYER_COORDINATE:
                 receiveExistingPlayer(packet);
@@ -167,7 +174,7 @@ public class GameOneScreen extends ScreenAdapter {
                 receiveJoin(packet);
                 break;
             case MOVE:
-                if (packet.getID() != localPlayerId) moveEnemyPlayer(packet);
+                if (packet.getPlayer().getID() != localPlayer.getID()) moveEnemyPlayer(packet);
                 break;
             case PRIMARY:
             case SECONDARY:
@@ -181,7 +188,7 @@ public class GameOneScreen extends ScreenAdapter {
                 System.out.println(activePlayerId + " is the new active player");
                 break;
             case LEAVE:
-                removeEnemyPlayer(packet.getID());
+                removeEnemyPlayer(packet.getPlayer().getID());
                 break;
             default:
                 break;
@@ -190,14 +197,14 @@ public class GameOneScreen extends ScreenAdapter {
 
     private void processAttack(Packet p)
     {
-        if (p.getID() == localPlayerId)
+        if (p.getPlayer().getID() == localPlayer.getID())
             return;
 
         var affectedPlayersId = p.getAffectedPlayersId();
         if (affectedPlayersId == null || affectedPlayersId.isEmpty())
             return;
 
-        Player dealer = playerById(p.getID());
+        Player dealer = playerById(p.getPlayer().getID());
         Player firstAffectedPlayer = null;
         for (Integer affectedPlayerId : affectedPlayersId) {
             firstAffectedPlayer = playerById(affectedPlayerId);
@@ -236,13 +243,13 @@ public class GameOneScreen extends ScreenAdapter {
     }
 
     private Player playerById(int playerId) {
-        if (playerId == localPlayerId) return localPlayer;
+        if (playerId == localPlayer.getID()) return localPlayer;
         return playersById.get(playerId);
     }
 
     private ActionType actionTypeFromPacket(Packet packet) {
-        CharacterClass characterClass = packet.getCharacterClass() == null
-            ? CharacterClass.WARRIOR : packet.getCharacterClass();
+        CharacterClass characterClass = packet.getPlayer().getCharacterClass() == null
+            ? CharacterClass.WARRIOR : packet.getPlayer().getCharacterClass();
         ActionType[] actions = ActionType.availableFor(characterClass);
         int actionIndex;
 
@@ -267,69 +274,74 @@ public class GameOneScreen extends ScreenAdapter {
     }
 
     private void receiveJoin(Packet packet) {
+        if (packet.getPlayer() == null) return;
+
         if (isPendingLocalJoin(packet)) {
             System.out.println("Received my own join packet before confirmation; ignoring.");
             return;
         }
-        if (packet.getID() == localPlayerId || playersById.containsKey(packet.getID())) return;
+        if (packet.getPlayer().getID() == localPlayer.getID() || playersById.containsKey(packet.getPlayer().getID())) return;
 
-        Vector2 position = packet.getFinalPosition();
-        if (position == null) return;
-        CharacterClass characterClass = packet.getCharacterClass() == null
-            ? CharacterClass.WARRIOR : packet.getCharacterClass();
-        Player player = new Player(packet.getID(), packet.getUsername(),
-            new Vector2(position), characterClass);
-        enemyPlayers.add(player);
-        playersById.put(packet.getID(), player);
+        addRemotePlayer(packet.getPlayer());
     }
 
     private void moveEnemyPlayer(Packet packet) {
-        Player enemyPlayer = playersById.get(packet.getID());
-        Vector2 destination = packet.getFinalPosition();
+        Player enemyPlayer = playersById.get(packet.getPlayer().getID());
+        Vector2 destination = packet.getPlayer().getPosition();
         if (enemyPlayer == null || destination == null) return;
         movementSystem.setNetworkDestination(enemyPlayer, new Vector2(destination));
     }
 
     private void sendLocalMove(Vector2 targetPosition) {
-        if (localPlayerId < 0) {
+        if (localPlayer.getID() < 0) {
             System.out.println("Cannot send MOVE before server assigns local player ID.");
             return;
         }
 
+        PlayerState playerState = PlayerConverter.toPlayerState(localPlayer);
+        playerState.setPosition(new Vector2(targetPosition));
+
         Packet packet = Packet.builder()
-            .ID(localPlayerId)
-            .username("local-player")
-            .finalPosition(targetPosition)
+            .player(playerState)
             .action(Action.MOVE)
             .build();
         networkClient.send(packet);
     }
 
     private void receiveExistingPlayer(Packet packet) {
-        Vector2 position = packet.getFinalPosition();
-        if (position == null || packet.getID() == localPlayerId
-            || playersById.containsKey(packet.getID())) return;
+        if (packet.getPlayer() == null) return;
+        if (packet.getPlayer().getID() == localPlayer.getID()
+            || playersById.containsKey(packet.getPlayer().getID())) return;
 
-        CharacterClass characterClass = packet.getCharacterClass() == null
-            ? CharacterClass.WARRIOR : packet.getCharacterClass();
-        Player existingPlayer = new Player(packet.getID(), packet.getUsername(),
-            new Vector2(position), characterClass);
-        enemyPlayers.add(existingPlayer);
-        playersById.put(packet.getID(), existingPlayer);
+        Player existingPlayer = addRemotePlayer(packet.getPlayer());
+        if (existingPlayer == null) return;
+
+        Vector2 position = existingPlayer.getPosition();
 
         if (receivingInitialPlayerList) {
-            System.out.println("Received existing player " + packet.getID()
+            System.out.println("Received existing player " + existingPlayer.getID()
                 + " at " + position.x + ", " + position.y);
         }
     }
 
-    private boolean isPendingLocalJoin(Packet packet) {
-        if (localPlayerId >= 0 || localPlayer == null
-            || packet.getFinalPosition() == null) return false;
+    private Player addRemotePlayer(PlayerState playerState) {
+        if (playerState.getPosition() == null) return null;
 
-        return "local-player".equals(packet.getUsername())
-            && localPlayer.getPosition().epsilonEquals(packet.getFinalPosition(), 0.001f)
-            && packet.getCharacterClass() == chosenClass;
+        Player player = PlayerConverter.toPlayer(playerState);
+        enemyPlayers.add(player);
+        playersById.put(player.getID(), player);
+        return player;
+    }
+
+    private boolean isPendingLocalJoin(Packet packet)
+    {
+        if (localPlayer == null || localPlayer.getID() >= 0
+            || packet.getPlayer().getPosition() == null) return false;
+
+        return localPlayer.getUsername().equals(packet.getPlayer().getUsername())
+            && packet.getPlayer().getTeam() == localPlayer.getTeam()
+            && localPlayer.getPosition().epsilonEquals(packet.getPlayer().getPosition(), 0.001f)
+            && packet.getPlayer().getCharacterClass() == localPlayer.getCharacterClass();
     }
 
     private void removeEnemyPlayer(int id) {
@@ -453,9 +465,8 @@ public class GameOneScreen extends ScreenAdapter {
         affectedPlayers.add(selectedTarget.getID());
 
         Packet packet = Packet.builder()
-            .ID(localPlayerId)
+            .player(PlayerConverter.toPlayerState(localPlayer))
             .affectedPlayersId(affectedPlayers)
-            .characterClass(localPlayer.getCharacterClass())
             .action(attack)
             .build();
 
@@ -528,7 +539,7 @@ public class GameOneScreen extends ScreenAdapter {
         localPlayer.onTurnStart();
 
         Packet packet = Packet.builder()
-            .ID(localPlayerId)
+            .player(PlayerConverter.toPlayerState(localPlayer))
             .action(Action.END_TURN)
             .build();
         networkClient.send(packet);

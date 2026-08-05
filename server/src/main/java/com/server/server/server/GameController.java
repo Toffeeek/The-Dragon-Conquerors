@@ -3,11 +3,11 @@ package com.server.server.server;
 
 
 import com.badlogic.gdx.math.Vector2;
-import com.github.thedragonconquerors.entities.Player;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
 import com.shared.shared.model.Pair;
+import com.shared.shared.model.PlayerState;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -32,30 +32,46 @@ public class GameController
 
 
     // ID : {username, (x,y)}
-    private Map<Integer, Pair<String, Vector2>> playerCoordinates = new HashMap<>();
+//    private Map<Integer, Pair<String, Vector2>> playerCoordinates = new HashMap<>();
+    private Map<Integer, PlayerState> players = new HashMap<>();
 
-    // ID : Player Object
-    private Map<Integer, Player> players = new HashMap<>();
-    private ArrayList<CharacterClass> playerClasses = new ArrayList<>();
+//    private ArrayList<CharacterClass> playerClasses = new ArrayList<>();
 
 
     @MessageMapping("/game.takeAction")
     @SendTo("/match/public")
     public Packet takeAction(@Payload Packet p)
     {
-        playerCoordinates.put(p.getID(), new Pair<>(p.getUsername(), p.getFinalPosition()));
+//        playerCoordinates.put(p.getID(), new Pair<>(p.getUsername(), p.getFinalPosition()));
+
+        if(p.getPlayer() == null)
+        {
+            System.out.println("\n\nNO PLAYER IN THE PACKET\n\n");
+        }
+
+        players.put(p.getPlayer().getID(), p.getPlayer());
+        updatePlayerState(p);
 
         if(p.getAction() == Action.PRIMARY ||
             p.getAction() == Action.SECONDARY ||
             p.getAction() == Action.ULTIMATE)
         {
             var killedPlayersId = new ArrayList<>(p.getKilledPlayersId());
+            for(int id : killedPlayersId)
+            {
+                players.get(id).setDead(true);
+            }
         }
 
         if(p.getAction() == Action.END_TURN)
         {
-            activePlayerId = (activePlayerId + 1) % totalPlayers;
+            while(true)
+            {
+                activePlayerId = (activePlayerId + 1) % totalPlayers;
 
+                if(!players.get(activePlayerId).isDead())
+                    break;
+            }
         }
         p.setActivePlayerID(activePlayerId);
 
@@ -66,8 +82,7 @@ public class GameController
     @SendTo("/match/public")
     public Packet addPlayer(@Payload Packet p, SimpMessageHeaderAccessor headerAccessor)
     {
-        playerClasses.add(p.getCharacterClass());
-
+        System.out.println("[SERVER] addPLayer()");
         if(totalPlayers == 0)
         {
             activePlayerId = 0;
@@ -76,9 +91,11 @@ public class GameController
         int assignedID = totalPlayers++;
         String sessionId = headerAccessor.getSessionId();
 
-        p.setID(assignedID);
+        p.getPlayer().setID(assignedID);
+
+//        PlayerState player = PlayerState.builder().ID(assignedID).build();
         Packet privateP = Packet.builder()
-            .ID(assignedID)
+            .player(PlayerState.builder().ID(assignedID).build())
             .activePlayerID(activePlayerId)
             .action(Action.PRIVATE_JOIN_CONFIRMATION)
             .build();
@@ -92,14 +109,11 @@ public class GameController
                 createHeaders(sessionId)
         );
 
-        for(var playerEntry : playerCoordinates.entrySet())
+        for(var playerEntry : players.entrySet())
         {
             Packet playerInfoPacket = Packet.builder()
-                    .ID(playerEntry.getKey())
-                    .username(playerEntry.getValue().first)
-                    .finalPosition(playerEntry.getValue().second)
+                    .player(players.get(playerEntry.getKey()))
                     .action(Action.PLAYER_COORDINATE)
-                    .characterClass(playerClasses.get(playerEntry.getKey()))
                     .activePlayerID(activePlayerId)
                     .build();
             messageTemplate.convertAndSendToUser
@@ -121,8 +135,18 @@ public class GameController
                 createHeaders(sessionId)
         );
 
-        playerCoordinates.put(assignedID, new Pair<>(p.getUsername(), p.getFinalPosition()));
+        players.put(assignedID, p.getPlayer());
+        p.setPlayer(players.get(assignedID));
         return p;
+    }
+
+    private void updatePlayerState(Packet p) {
+        PlayerState player = players.get(p.getPlayer().getID());
+        if (player == null) return;
+
+        if (p.getPlayer().getUsername() != null) player.setUsername(p.getPlayer().getUsername());
+        if (p.getPlayer().getPosition() != null) player.setPosition(p.getPlayer().getPosition());
+        if (p.getPlayer().getCharacterClass() != null) player.setCharacterClass(p.getPlayer().getCharacterClass());
     }
 
     private MessageHeaders createHeaders(String sessionId)

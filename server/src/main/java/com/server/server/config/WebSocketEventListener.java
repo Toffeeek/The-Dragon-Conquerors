@@ -5,6 +5,7 @@ package com.server.server.config;
 
 import com.shared.shared.model.Action;
 import com.shared.shared.model.Packet;
+import com.shared.shared.model.PlayerState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -70,7 +71,7 @@ public class WebSocketEventListener
 
             var packet = Packet.builder()
                     .action(Action.LEAVE)
-                    .ID(ID)
+                    .player(PlayerState.builder().ID(ID).build())
                     .build();
 
             messageTemplate.convertAndSend("/match/public", packet);

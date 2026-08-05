@@ -4,6 +4,7 @@ import com.badlogic.gdx.math.Vector2;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
+import com.shared.shared.model.PlayerState;
 import lombok.Setter;
 import org.springframework.messaging.converter.JacksonJsonMessageConverter;
 import org.springframework.messaging.simp.stomp.StompFrameHandler;
@@ -63,7 +64,7 @@ public class NetworkClient
             public void handleFrame(StompHeaders headers, Object payload)
             {
                 Packet p = (Packet) payload;
-                System.out.println("Received public packet: " + "PlayerID " + p.getID() + ":" + p.getAction() + ":" + p.getFinalPosition());
+                System.out.println("[SERVER] Received public packet: " + "PlayerID " + p.getPlayer().getID() + ":" + p.getAction() + ":" + p.getPlayer().getPosition());
                 handlePacket(p);
             }
         });
@@ -102,14 +103,12 @@ public class NetworkClient
         }
     }
 
-    public void join(String username, Vector2 startingPosition, CharacterClass characterClass)
+    public void join(PlayerState playerState)
     {
         if (session != null && session.isConnected())
         {
             Packet joinPacket = Packet.builder()
-                .username(username)
-                .finalPosition(startingPosition)
-                .characterClass(characterClass)
+                .player(playerState)
                 .action(Action.JOIN)
                 .build();
             session.send("/app/game.joinGame", joinPacket);

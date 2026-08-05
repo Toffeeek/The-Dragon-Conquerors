@@ -12,14 +12,14 @@ import java.util.ArrayList;
 @Builder
 public class Packet
 {
-    @Builder.Default
-    private int ID = -1;
-    @Builder.Default
+//    @Builder.Default
+//    private int ID = -1;
+//    @Builder.Default
     private int activePlayerID = -1;
-    private String username;
-    private Vector2 finalPosition;
+//    private String username;
+//    private Vector2 finalPosition;
     private Action action;
-    private CharacterClass characterClass;
+//    private CharacterClass characterClass;
 
     @Builder.Default
     private int deltaHealth = 0;
@@ -30,26 +30,27 @@ public class Packet
     @Builder.Default
     private ArrayList<Integer> killedPlayersId = new ArrayList<Integer>();
 
+    private PlayerState player;
 
-    Packet(int ID, Vector2 finalPosition, Action action, int activePlayerID)
-    {
-        this.ID = ID;
-        this.finalPosition = finalPosition;
-        this.action = action;
-        this.activePlayerID = activePlayerID;
-    }
-    Packet(int ID, CharacterClass characterClass, Vector2 finalPosition, Action action, int activePlayerID)
-    {
-        this.ID = ID;
-        this.characterClass = characterClass;
-        this.finalPosition = finalPosition;
-        this.action = action;
-        this.activePlayerID = activePlayerID;
-    }
-    Packet(int ID, Vector2 finalPosition, Action action)
-    {
-        this.ID = ID;
-        this.finalPosition = finalPosition;
-        this.action = action;
-    }
+//    Packet(int ID, Vector2 finalPosition, Action action, int activePlayerID)
+//    {
+//        this.ID = ID;
+//        this.finalPosition = finalPosition;
+//        this.action = action;
+//        this.activePlayerID = activePlayerID;
+//    }
+//    Packet(int ID, CharacterClass characterClass, Vector2 finalPosition, Action action, int activePlayerID)
+//    {
+//        this.ID = ID;
+//        this.characterClass = characterClass;
+//        this.finalPosition = finalPosition;
+//        this.action = action;
+//        this.activePlayerID = activePlayerID;
+//    }
+//    Packet(int ID, Vector2 finalPosition, Action action)
+//    {
+//        this.ID = ID;
+//        this.finalPosition = finalPosition;
+//        this.action = action;
+//    }
 }

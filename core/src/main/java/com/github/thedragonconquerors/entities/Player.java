@@ -6,10 +6,20 @@ import com.github.thedragonconquerors.movement.MovementController;
 import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.stats.StatCalculator;
 import com.shared.shared.model.stats.StatComponent;
+import com.shared.shared.model.TEAM;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
-public class Player {
-    private final int ID;
+//@Builder
+@Getter
+public class Player
+{
+    @Setter
+    private int ID;
     private final String username;
+    @Setter
+    private TEAM team;
     private final CharacterClass characterClass;
     private final Vector2 position;
     private final float speed;
@@ -17,9 +27,10 @@ public class Player {
     private final MovementController movementController;
     private final PlayerAnimationController animationController;
 
-    public Player(int ID, String username, Vector2 position, CharacterClass characterClass) {
+    public Player(int ID, String username, TEAM team, Vector2 position, CharacterClass characterClass) {
         this.ID = ID;
         this.username = username;
+        this.team = team;
         this.characterClass = characterClass;
         this.stats = characterClass.createStats();
         this.position = new Vector2(position);
@@ -29,22 +40,6 @@ public class Player {
         this.movementController = new MovementController(maxDistance);
         this.animationController = new PlayerAnimationController();
     }
-
-    public int getID() { return ID; }
-
-    public String getUsername() { return username; }
-
-    public CharacterClass getCharacterClass() { return characterClass; }
-
-    public Vector2 getPosition() { return position; }
-
-    public float getSpeed() { return speed; }
-
-    public StatComponent getStats() { return stats; }
-
-    public MovementController getMovementController() { return movementController; }
-
-    public PlayerAnimationController getAnimationController() { return animationController; }
 
     public void onTurnStart() {
         movementController.resetForNewTurn();
