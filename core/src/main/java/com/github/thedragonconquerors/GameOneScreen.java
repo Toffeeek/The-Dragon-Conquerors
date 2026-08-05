@@ -67,23 +67,19 @@ public class GameOneScreen extends ScreenAdapter {
     private int selectedActionIndex = 0;
     private ActionType pendingTargetAction;
 
-    public GameOneScreen(Main game, TEAM team, CharacterClass chosenClass) {
+    public GameOneScreen(Main game, TEAM team, CharacterClass chosenClass)
+    {
         this.networkClient = game.getNetworkClient();
-
-
         this.game = game;
         this.assetService = game.getAssetService();
         this.viewport = game.getViewport();
         this.camera = game.getCamera();
         this.batch = game.getBatch();
         this.networkClient.setPacketHandler(packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
-
-        availableActions = ActionType.availableFor(chosenClass);
-
-
+        this.availableActions = ActionType.availableFor(chosenClass);
+        
         Vector2 startingPosition = team == TEAM.BLUE ? GAMEONE_BLUE_SPAWN : GAMEONE_RED_SPAWN;
-        localPlayer = new Player(-1, "default-username", team, startingPosition, chosenClass);
-        spawnLocalPlayer(localPlayer);
+        createLocalPlayer(team, startingPosition, chosenClass);
     }
 
     @Override
@@ -115,10 +111,11 @@ public class GameOneScreen extends ScreenAdapter {
         Gdx.input.setInputProcessor(mouseInputHandler);
     }
 
-    private void spawnLocalPlayer(Player player)
+    private void createLocalPlayer(TEAM team, Vector2 startingPosition, CharacterClass chosenClass)
     {
+        this.localPlayer = new Player(-1, "default-username", team, startingPosition, chosenClass);
         receivingInitialPlayerList = true;
-        networkClient.join(PlayerConverter.toPlayerState(player));
+        networkClient.join(PlayerConverter.toPlayerState(localPlayer));
     }
 
     private boolean localPlayerIsActive()
