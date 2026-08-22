@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/rendering/PlayerRenderer.java
 package com.github.thedragonconquerors.rendering;
 
 import com.badlogic.gdx.graphics.Color;
@@ -18,7 +19,6 @@ import com.shared.shared.model.CharacterClass;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BooleanSupplier;
 
 /** Renders class-specific animated sprite sheets plus movement and target overlays. */
 public class PlayerRenderer implements Disposable {
@@ -40,21 +40,21 @@ public class PlayerRenderer implements Disposable {
     private static final Color COLOR_REACHABLE = new Color(0.2f, 0.5f, 0.9f, 0.30f);
     private static final Color COLOR_TARGET_IN_RANGE = new Color(0.25f, 1f, 0.35f, 0.95f);
     private static final Color COLOR_TARGET_OUT_OF_RANGE = new Color(1f, 0.25f, 0.2f, 0.95f);
+    private static final Color COLOR_TEAM_AZURE = new Color(0.2f, 0.55f, 1f, 0.95f);
+    private static final Color COLOR_TEAM_CRIMSON = new Color(0.95f, 0.2f, 0.2f, 0.95f);
 
     private final ShapeRenderer shapeRenderer = new ShapeRenderer();
     private final Batch spriteBatch;
     private final AssetService assetService;
     private final Map<CharacterClass, TextureRegion[][]> sheetCache = new EnumMap<>(CharacterClass.class);
 
-    private final BooleanSupplier localPlayerActiveCheck;
     private List<Vector2> cachedReachable;
     private float lastRemainingDistance = -1f;
     private float pulseTime = 0f;
 
-    public PlayerRenderer(AssetService assetService, Batch spriteBatch, BooleanSupplier localPlayerActiveCheck) {
+    public PlayerRenderer(AssetService assetService, Batch spriteBatch) {
         this.assetService = assetService;
         this.spriteBatch = spriteBatch;
-        this.localPlayerActiveCheck = localPlayerActiveCheck;
     }
 
     public void renderLocal(Player player, Matrix4 projection, NavGrid navGrid, float delta) {
@@ -63,16 +63,20 @@ public class PlayerRenderer implements Disposable {
         pulseTime += delta;
 
         float remaining = player.getMovementController().getRemainingMovementDistance();
-        if (navGrid != null && Math.abs(remaining - lastRemainingDistance) > 0.0001f) {
+        if (player.isActiveTurn() && navGrid != null
+            && Math.abs(remaining - lastRemainingDistance) > 0.0001f) {
             cachedReachable = navGrid.getReachablePositions(player.getPosition(), remaining);
             lastRemainingDistance = remaining;
+        } else if (!player.isActiveTurn()) {
+            cachedReachable = null;
+            lastRemainingDistance = -1f;
         }
 
-        drawReachable(projection);
+        if (player.isActiveTurn()) drawReachable(projection);
         drawCharacter(player, projection);
         drawPath(player, projection);
         drawBars(player, projection, true);
-        drawRing(player, projection, COLOR_PLAYER_RING, 0.43f);
+        drawRing(player, projection, teamColor(player), 0.43f);
     }
 
     public void renderEnemy(Player player, Matrix4 projection, float delta,
@@ -84,6 +88,8 @@ public class PlayerRenderer implements Disposable {
             float pulse = 0.47f + 0.04f * (float) Math.sin(pulseTime * 6f);
             drawRing(player, projection,
                 inRange ? COLOR_TARGET_IN_RANGE : COLOR_TARGET_OUT_OF_RANGE, pulse);
+        } else {
+            drawRing(player, projection, teamColor(player), 0.40f);
         }
 
         drawCharacter(player, projection);
@@ -91,7 +97,7 @@ public class PlayerRenderer implements Disposable {
     }
 
     private void drawReachable(Matrix4 projection) {
-        if (cachedReachable == null || !localPlayerActiveCheck.getAsBoolean()) return;
+        if (cachedReachable == null) return;
         shapeRenderer.setProjectionMatrix(projection);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(COLOR_REACHABLE);
@@ -209,14 +215,28 @@ public class PlayerRenderer implements Disposable {
         shapeRenderer.end();
     }
 
+    private Color teamColor(Player player) {
+        if (player == null) return COLOR_PLAYER_RING;
+        return player.getTeamIndex() == 1 ? COLOR_TEAM_AZURE : COLOR_TEAM_CRIMSON;
+    }
+
+    /**
+     * Flat colour drawn when a class has no usable sprite sheet.
+     *
+     * <p>One distinct hue per class so the six classes stay tellable apart in
+     * placeholder mode. {@code null} and any future class fall through to white
+     * rather than throwing.</p>
+     */
     private Color fallbackColor(CharacterClass characterClass) {
+        if (characterClass == null) return Color.WHITE;
         switch (characterClass) {
-            case WARRIOR: return new Color(0.65f, 0.18f, 0.18f, 1f);
-            case MAGE: return new Color(0.34f, 0.22f, 0.72f, 1f);
-            case ARCHER: return new Color(0.18f, 0.55f, 0.30f, 1f);
-            case PALADIN: return new Color(0.85f, 0.78f, 0.35f, 1f);
-            case ROGUE: return new Color(0.28f, 0.20f, 0.35f, 1f);
-            default: return Color.WHITE;
+            case PALADIN: return new Color(0.85f, 0.78f, 0.35f, 1f); // gold
+            case MAGE:    return new Color(0.34f, 0.22f, 0.72f, 1f); // violet
+            case WRAITH:  return new Color(0.28f, 0.20f, 0.35f, 1f); // shadow purple
+            case CLERIC:  return new Color(0.80f, 0.86f, 0.92f, 1f); // pale silver
+            case BARD:    return new Color(0.80f, 0.42f, 0.55f, 1f); // rose
+            case ARCHER:  return new Color(0.18f, 0.55f, 0.30f, 1f); // forest green
+            default:      return Color.WHITE;
         }
     }
 

@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/movement/MovementController.java
 package com.github.thedragonconquerors.movement;
 
 import com.badlogic.gdx.math.Vector2;
@@ -24,7 +25,7 @@ public class MovementController {
     @Getter
     private float remainingMovementDistance;
     @Getter
-    private final float maxMovementDistance;
+    private float maxMovementDistance;
 
     public MovementController(float maxMovementDistance) {
         this.maxMovementDistance       = maxMovementDistance;
@@ -87,6 +88,31 @@ public class MovementController {
     {
         remainingMovementDistance = Math.max(remainingMovementDistance, pathDistance(currentPos, newPath));
         setPath(newPath);
+    }
+
+    /** Animates an accepted server move while ending on the server's stamina value. */
+    public void setAuthoritativePath(Vector2 currentPos, List<Vector2> newPath,
+                                     float remainingAfterMove)
+    {
+        if (newPath == null || newPath.isEmpty()) {
+            remainingMovementDistance = Math.max(0f, remainingAfterMove);
+            stopMoving();
+            return;
+        }
+        remainingMovementDistance = Math.max(0f, remainingAfterMove)
+            + pathDistance(currentPos, newPath);
+        setPath(newPath);
+    }
+
+    public void synchronizeRemainingDistance(float authoritativeRemaining)
+    {
+        if (!moving) remainingMovementDistance = Math.max(0f, authoritativeRemaining);
+    }
+
+    public void synchronizeMovement(float authoritativeMax, float authoritativeRemaining)
+    {
+        maxMovementDistance = Math.max(0f, authoritativeMax);
+        synchronizeRemainingDistance(authoritativeRemaining);
     }
 
     private float pathDistance(Vector2 start, List<Vector2> newPath)

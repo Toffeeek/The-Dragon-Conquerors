@@ -34,3 +34,12 @@ dependencies {
 tasks.named('test') {
   useJUnitPlatform()
 }
+
+// Shared protocol and combat code must publish a normal dependency JAR.
+tasks.named('bootJar') {
+  enabled = false
+}
+
+tasks.named('jar') {
+  enabled = true
+}

@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/rendering/HudRenderer.java
 package com.github.thedragonconquerors.rendering;
 
 import com.badlogic.gdx.graphics.Color;
@@ -8,9 +9,12 @@ import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.utils.Disposable;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.github.thedragonconquerors.combat.ActionResult;
-import com.github.thedragonconquerors.combat.ActionType;
 import com.github.thedragonconquerors.entities.Player;
+import com.shared.shared.model.ability.AbilityType;
 import com.shared.shared.model.stats.StatComponent;
+import com.shared.shared.model.world.Environment;
+
+import java.util.List;
 
 public class HudRenderer implements Disposable {
 
@@ -58,6 +62,8 @@ public class HudRenderer implements Disposable {
     // Persistent while a targeted action is waiting for a mouse click.
     private String targetingPrompt = "";
     private String joinUrl = "";
+    private String environmentName = "";
+    private String environmentRule = "";
 
     // ── action selection ──────────────────────────────────────────
     private int selectedActionIndex = 0;
@@ -89,8 +95,8 @@ public class HudRenderer implements Disposable {
         this.selectedActionIndex = selectedActionIndex;
     }
 
-    public void showTargetingPrompt(ActionType action) {
-        this.targetingPrompt = "Select a player for " + action.displayName
+    public void showTargetingPrompt(AbilityType action) {
+        this.targetingPrompt = "Select a target for " + action.getDisplayName()
             + " — green is in range, red is out of range  [ESC to cancel]";
     }
 
@@ -100,6 +106,11 @@ public class HudRenderer implements Disposable {
 
     public void setJoinUrl(String joinUrl) {
         this.joinUrl = joinUrl == null ? "" : joinUrl;
+    }
+
+    public void setEnvironment(Environment environment) {
+        this.environmentName = environment == null ? "" : environment.getDisplayName();
+        this.environmentRule = environment == null ? "" : environment.hazardSummary();
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -117,14 +128,14 @@ public class HudRenderer implements Disposable {
         StatComponent stats         = player.getStats();
         float maxMovement           = player.getMovementController().getMaxMovementDistance();
         float remainingMovement     = player.getMovementController().getRemainingMovementDistance();
-        ActionType[] actions        = ActionType.availableFor(player.getCharacterClass());
+        List<AbilityType> actions   = AbilityType.forClass(player.getCharacterClass());
 
         float hpRatio               = (float) stats.getHp()   / stats.getMaxHp();
         float manaRatio             = (float) stats.getMana()  / stats.getMaxMana();
         float staminaRatio          = remainingMovement / maxMovement;
 
         // total action bar width, centred on screen
-        float totalBarW = actions.length * SLOT_W + (actions.length - 1) * SLOT_GAP;
+        float totalBarW = actions.size() * SLOT_W + (actions.size() - 1) * SLOT_GAP;
         float barStartX = (sw - totalBarW) / 2f;
 
         shapeRenderer.setProjectionMatrix(screenMatrix);
@@ -136,9 +147,12 @@ public class HudRenderer implements Disposable {
         drawBar(STAMINA_Y, staminaRatio, STAMINA_FILL);
 
         // ── action slots background ───────────────────────────────
-        for (int i = 0; i < actions.length; i++) {
+        for (int i = 0; i < actions.size(); i++) {
             float sx = barStartX + i * (SLOT_W + SLOT_GAP);
-            boolean canAfford = stats.getMana() >= actions[i].manaCost;
+            AbilityType ability = actions.get(i);
+            boolean canAfford = stats.getMana() >= ability.getManaCost()
+                && player.cooldownTurns(ability) == 0
+                && player.isActiveTurn() && !player.isActionUsed();
 
             shapeRenderer.setColor(canAfford ? ACTION_BG : ACTION_NOMANA);
             shapeRenderer.rect(sx, SLOT_Y, SLOT_W, SLOT_H);
@@ -148,7 +162,7 @@ public class HudRenderer implements Disposable {
 
         // ── action slot borders (Line mode) ───────────────────────
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        for (int i = 0; i < actions.length; i++) {
+        for (int i = 0; i < actions.size(); i++) {
             float sx = barStartX + i * (SLOT_W + SLOT_GAP);
             boolean selected = (i == selectedActionIndex);
             shapeRenderer.setColor(selected ? ACTION_SELECTED : ACTION_BORDER);
@@ -181,11 +195,15 @@ public class HudRenderer implements Disposable {
         if (!joinUrl.isEmpty()) {
             font.draw(hudBatch, "Join: " + joinUrl, 16f, sh - 14f);
         }
+        if (!environmentName.isEmpty()) {
+            font.draw(hudBatch, "Battlefield: " + environmentName, sw - 180f, sh - 14f);
+            font.draw(hudBatch, environmentRule, sw - 300f, sh - 32f);
+        }
 
         // action slot labels
-        for (int i = 0; i < actions.length; i++) {
+        for (int i = 0; i < actions.size(); i++) {
             float sx = barStartX + i * (SLOT_W + SLOT_GAP);
-            ActionType action = actions[i];
+            AbilityType action = actions.get(i);
 
             // hotkey
             font.setColor(ACTION_SELECTED);
@@ -193,7 +211,7 @@ public class HudRenderer implements Disposable {
 
             // action name (wrap at ~14 chars)
             font.setColor(TEXT_COLOR);
-            String name = action.displayName;
+            String name = action.getDisplayName();
             if (name.length() > 13) {
                 // split at space closest to middle
                 int mid = name.lastIndexOf(' ', 13);
@@ -206,9 +224,15 @@ public class HudRenderer implements Disposable {
 
             // mana cost
             font.setColor(MANA_FILL);
-            String cost = action.manaCost > 0 ? action.manaCost + " MP" : "Free";
+            int cooldown = player.cooldownTurns(action);
+            String cost = cooldown > 0 ? "CD " + cooldown
+                : action.getManaCost() > 0 ? action.getManaCost() + " MP" : "Free";
             font.draw(hudBatch, cost, sx + 4f, SLOT_Y + 14f);
         }
+
+        font.setColor(player.isActiveTurn() ? ACTION_SELECTED : TEXT_COLOR);
+        font.draw(hudBatch, player.isActiveTurn() ? "YOUR TURN" : "WAITING FOR TURN",
+            sw - 165f, 46f);
 
         // target-selection prompt remains visible until a player is clicked or ESC is pressed
         if (!targetingPrompt.isEmpty()) {

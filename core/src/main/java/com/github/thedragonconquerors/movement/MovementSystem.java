@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/movement/MovementSystem.java
 package com.github.thedragonconquerors.movement;
 
 import com.badlogic.gdx.math.Vector2;
@@ -35,6 +36,37 @@ public class MovementSystem {
         List<Vector2> clampedPath = clampPathToDistance(player.getPosition(), path, remaining);
 
         player.getMovementController().setPath(clampedPath);
+    }
+
+    /** Returns the collision-checked, stamina-clamped destination without moving locally. */
+    public Vector2 previewDestination(Player player, Vector2 clickedWorldPos)
+    {
+        if (navGrid == null || player == null || clickedWorldPos == null) return null;
+        float remaining = player.getMovementController().getRemainingMovementDistance();
+        List<Vector2> path = navGrid.findPath(player.getPosition(), clickedWorldPos, remaining);
+        if (path.isEmpty()) return null;
+        List<Vector2> clamped = clampPathToDistance(player.getPosition(), path, remaining);
+        return clamped.isEmpty() ? null : new Vector2(clamped.get(clamped.size() - 1));
+    }
+
+    public void setAuthoritativeDestination(Player player, Vector2 destination,
+                                            float remainingAfterMove)
+    {
+        if (player == null || destination == null) return;
+        if (navGrid == null) {
+            player.setPosition(destination.x, destination.y);
+            player.getMovementController().synchronizeRemainingDistance(remainingAfterMove);
+            return;
+        }
+        List<Vector2> path = navGrid.findPath(
+            player.getPosition(), destination, Float.MAX_VALUE);
+        if (path.isEmpty()) {
+            player.setPosition(destination.x, destination.y);
+            player.getMovementController().synchronizeRemainingDistance(remainingAfterMove);
+            return;
+        }
+        player.getMovementController().setAuthoritativePath(
+            player.getPosition(), path, remainingAfterMove);
     }
 
     public void setNetworkDestination(Player player, Vector2 destination)

@@ -82,14 +82,31 @@ public enum ActionType {
      * Returns the ordered list of actions available to a given class.
      * Slot 0 = key [1], slot 1 = key [2], etc.
      * Always starts with BASIC_ATTACK so every class has a free attack.
+     *
+     * <p><b>PROVISIONAL MAPPING.</b> This enum predates the design document's
+     * roster and its actions do not match it: there is no Curse, Poison Jab,
+     * Teleport, Heal, Revive, Inspiring Verse, Encore or Rain of Arrows here,
+     * and nothing in this package applies status effects, cooldowns or area
+     * damage. The authoritative catalogue is
+     * {@code com.shared.shared.model.ability.AbilityType}, which already
+     * describes all twenty design abilities as data.</p>
+     *
+     * <p>The mapping below exists only so the client keeps a working action bar
+     * until {@code CombatResolver} lands and this package is retired. Wraith
+     * inherits the old Rogue kit, Cleric the old self-heal, Bard the old buff —
+     * placeholders, not balance decisions. Do not tune these numbers; tune
+     * {@code AbilityType} instead.</p>
      */
     public static ActionType[] availableFor(CharacterClass cls) {
+        if (cls == null) return new ActionType[]{ BASIC_ATTACK, DEFEND };
         switch (cls) {
-            case WARRIOR: return new ActionType[]{ BASIC_ATTACK, SHIELD_BASH, WAR_CRY,       CLEAVE       };
+            case PALADIN: return new ActionType[]{ BASIC_ATTACK, HOLY_STRIKE, LAY_ON_HANDS,  DIVINE_SHIELD};
             case MAGE:    return new ActionType[]{ BASIC_ATTACK, FIREBALL,    ICE_SHARD,     ARCANE_SHIELD};
             case ARCHER:  return new ActionType[]{ BASIC_ATTACK, ARROW_SHOT,  POISON_ARROW,  EVASIVE_ROLL };
-            case PALADIN: return new ActionType[]{ BASIC_ATTACK, HOLY_STRIKE, LAY_ON_HANDS,  DIVINE_SHIELD};
-            case ROGUE:   return new ActionType[]{ BASIC_ATTACK, BACKSTAB,    DUAL_SLASH,    SMOKE_BOMB   };
+            // Placeholder kits — see the note above.
+            case WRAITH:  return new ActionType[]{ BASIC_ATTACK, BACKSTAB,    DUAL_SLASH,    SMOKE_BOMB   };
+            case CLERIC:  return new ActionType[]{ BASIC_ATTACK, SHIELD_BASH, LAY_ON_HANDS,  DEFEND       };
+            case BARD:    return new ActionType[]{ BASIC_ATTACK, WAR_CRY,     ARCANE_SHIELD, DEFEND       };
             default:      return new ActionType[]{ BASIC_ATTACK, DEFEND };
         }
     }

@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/Main.java
 package com.github.thedragonconquerors;
 
 import com.badlogic.gdx.Application;
@@ -15,8 +16,10 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
-import com.shared.shared.model.CharacterClass;
+import com.shared.shared.model.CharacterBuild;
 import com.shared.shared.model.Packet;
+import com.shared.shared.model.world.Environment;
+import com.shared.shared.network.MatchState;
 import lombok.Getter;
 
 import java.io.BufferedReader;
@@ -32,6 +35,7 @@ import java.net.SocketException;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -112,9 +116,12 @@ public class Main extends Game
         setScreen(LobbyScreen.class);
     }
 
-    public void startGame(int teamIndex, CharacterClass chosenClass)
+    public void startGame(int teamIndex, CharacterBuild chosenBuild,
+                          Environment environment, int localPlayerId,
+                          List<Packet> roster, MatchState initialState)
     {
-        addScreen(new GameOneScreen(this, teamIndex, chosenClass));
+        addScreen(new GameOneScreen(this, teamIndex, chosenBuild, environment,
+            localPlayerId, roster, initialState));
         setScreen(GameOneScreen.class);
     }
 

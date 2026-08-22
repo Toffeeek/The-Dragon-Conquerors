@@ -1,10 +1,12 @@
+// File Location: server/src/main/java/com/server/server/config/WebSocketEventListener.java
 package com.server.server.config;
 
-
-
-
+import com.server.server.matchmaking.MatchRoom;
+import com.server.server.matchmaking.RoomDisconnectResult;
+import com.server.server.matchmaking.RoomRegistry;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.Packet;
+import com.shared.shared.model.world.Environment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -13,67 +15,49 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
+import java.util.Map;
 
+/** Removes disconnected sessions from only their assigned room. */
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class WebSocketEventListener
-{
-    /**
-     * Used to manually send messages to WebSocket/STOMP destinations.
-     * In controller methods, @SendTo can automatically broadcast the return value.
-     * But this class is an event listener, not a @MessageMapping controller method,
-     * so we use messageTemplate.convertAndSend(...) to broadcast messages manually.
-     *
-     * @RequiredArgsConstructor generates a constructor for this final field.
-     * Spring then uses constructor injection to provide the SimpMessageSendingOperations
-     * bean, similar to @Autowired but through the constructor.
-     */
-    private final SimpMessageSendingOperations messageTemplate;
+public class WebSocketEventListener {
+    private final SimpMessageSendingOperations messages;
+    private final RoomRegistry rooms;
 
-    /**
-     * Called automatically when Spring publishes a SessionDisconnectEvent.
-     *
-     * @EventListener tells Spring that this method should listen for application events.
-     * Because this method takes a SessionDisconnectEvent parameter, Spring calls it only
-     * for disconnect events, not for every type of event.
-     *
-     * The event contains the message/headers for the disconnected WebSocket session.
-     * We wrap the event message with StompHeaderAccessor so we can read the STOMP headers
-     * and session attributes.
-     *
-     * The username was previously saved in the session attributes when the user joined:
-     * sessionAttributes["username"] = senderName.
-     *
-     * If a username exists, we create a LEAVE message and broadcast it to "/topic/public"
-     * so all remaining clients subscribed to that destination know that the user left.
-     */
     @EventListener
-    public void handleWebSocketListener(SessionDisconnectEvent event)
-    {
-        StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
+    public void handleWebSocketListener(SessionDisconnectEvent event) {
+        StompHeaderAccessor headers = StompHeaderAccessor.wrap(event.getMessage());
+        Object playerId = headers.getSessionAttributes().get("ID");
+        if (!(playerId instanceof Integer) || (Integer) playerId < 0) return;
 
-        Object IDAttribute = headerAccessor
-                .getSessionAttributes()
-                .get("ID");
+        RoomDisconnectResult result = rooms.disconnect(headers.getSessionId(), (Integer) playerId);
+        if (result == null) return;
 
-        if(IDAttribute == null)
-        {
-            return;
+        MatchRoom room = result.getRoom();
+        log.info("Player {} disconnected from {}", playerId, room.getId());
+        messages.convertAndSend(room.destination(), Packet.builder()
+            .action(Action.LEAVE)
+            .roomId(room.getId())
+            .ID((Integer) playerId)
+            .build());
+
+        if (result.getMatchState() != null) {
+            messages.convertAndSend(room.destination(), Packet.builder()
+                .action(Action.MATCH_STATE)
+                .roomId(room.getId())
+                .matchState(result.getMatchState())
+                .build());
         }
 
-        int ID = (int) IDAttribute;
-
-        if(ID != -1)
-        {
-            log.info("User disconnected: {}", ID);
-
-            var packet = Packet.builder()
-                    .action(Action.LEAVE)
-                    .ID(ID)
-                    .build();
-
-            messageTemplate.convertAndSend("/match/public", packet);
-        }
+        Map<Environment, Integer> counts = room.getLobby().voteCounts();
+        messages.convertAndSend(room.destination(), Packet.builder()
+            .action(Action.ENVIRONMENT_VOTE_UPDATE)
+            .roomId(room.getId())
+            .connectedPlayers(room.getLobby().size())
+            .bogVotes(counts.get(Environment.BOG))
+            .lavaVotes(counts.get(Environment.LAVA))
+            .canyonVotes(counts.get(Environment.CANYON))
+            .build());
     }
 }
