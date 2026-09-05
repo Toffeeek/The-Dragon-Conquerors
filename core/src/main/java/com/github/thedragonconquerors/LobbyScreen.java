@@ -36,7 +36,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/** Class -> race -> environment-vote flow for the multiplayer lobby. */
+/** Class -> race -> test start (or environment voting) for the multiplayer lobby. */
 public class LobbyScreen extends ScreenAdapter {
     private enum Step { CLASS, RACE, ENVIRONMENT }
 
@@ -69,6 +69,9 @@ public class LobbyScreen extends ScreenAdapter {
     private boolean joined;
     private boolean voteSent;
     private boolean matchStarting;
+    private boolean testingMode = true;
+    private boolean roomReady;
+    private boolean startRequested;
 
     public LobbyScreen(Main game, String joinUrl) {
         this.game = game;
@@ -237,16 +240,25 @@ public class LobbyScreen extends ScreenAdapter {
                 backButton.setDisabled(true);
                 nextButton.setDisabled(false);
                 nextButton.setText("CHOOSE RACE");
-                footerHelpLabel.setText("Step 1 of 3 - inspect base stats and choose a class.");
+                footerHelpLabel.setText("Choose a class and inspect its base stats.");
                 break;
             case RACE:
                 selectionHost.add(createRacePanel()).grow();
                 backButton.setDisabled(joined);
                 nextButton.setDisabled(joined);
-                nextButton.setText("JOIN & VOTE");
-                footerHelpLabel.setText("Step 2 of 3 - racial boosts have an equal four-step budget.");
+                nextButton.setText("JOIN GAME");
+                footerHelpLabel.setText("Choose a race, then join the game.");
                 break;
             case ENVIRONMENT:
+                if (testingMode || localPlayerId < 0) {
+                    selectionHost.add(createTestingPanel()).grow();
+                    backButton.setDisabled(true);
+                    nextButton.setDisabled(!roomReady || startRequested);
+                    nextButton.setText(!roomReady ? "JOINING..."
+                        : startRequested ? "STARTING..." : "START TEST");
+                    footerHelpLabel.setText("Start alone, or let friends join before starting.");
+                    break;
+                }
                 selectionHost.add(createEnvironmentPanel()).grow();
                 backButton.setDisabled(true);
                 nextButton.setDisabled(true);
@@ -400,6 +412,17 @@ public class LobbyScreen extends ScreenAdapter {
         return panel;
     }
 
+    private Table createTestingPanel() {
+        Table panel = panel("READY TO TEST", "Map voting is temporarily disabled. Canyon loads automatically.");
+        Label details = new Label("Players connected: " + connectedPlayers
+            + "\n\nStart with 1-4 players. No full party is required."
+            + "\nSolo play stays open for movement and ability testing."
+            + "\n\nPress Esc in the battlefield to return to the menu.", skin, "default");
+        details.setWrap(true);
+        panel.add(details).width(660f).left().padTop(25f).row();
+        return panel;
+    }
+
     private Table detailBox() {
         Table table = new Table();
         table.setBackground(theme.inset());
@@ -444,6 +467,10 @@ public class LobbyScreen extends ScreenAdapter {
             step = Step.ENVIRONMENT;
             joinLobby();
             showStep();
+        } else if (step == Step.ENVIRONMENT && testingMode && roomReady && !startRequested) {
+            startRequested = true;
+            game.getNetworkClient().startTestMatch(localPlayerId);
+            showStep();
         }
     }
 
@@ -466,7 +493,7 @@ public class LobbyScreen extends ScreenAdapter {
     }
 
     private void submitVoteIfReady() {
-        if (localPlayerId < 0 || selectedEnvironment == null) return;
+        if (testingMode || localPlayerId < 0 || selectedEnvironment == null) return;
         game.getNetworkClient().voteEnvironment(localPlayerId, selectedEnvironment);
         voteSent = true;
         nextButton.setText("VOTE SUBMITTED");
@@ -479,12 +506,17 @@ public class LobbyScreen extends ScreenAdapter {
         switch (packet.getAction()) {
             case PRIVATE_JOIN_CONFIRMATION:
                 localPlayerId = packet.getID();
+                testingMode = packet.isTestingMode();
                 connectedPlayers = Math.max(connectedPlayers, packet.getConnectedPlayers());
                 String roomName = packet.getRoomId() == null ? "match room" : packet.getRoomId();
                 lobbyStatusLabel.setText("Assigned to " + roomName + " as player "
-                    + (localPlayerId + 1) + ". Cast your vote.");
+                    + (localPlayerId + 1) + (testingMode ? ". Ready to test." : ". Cast your vote."));
                 lobbyStatusLabel.setColor(FantasyUiTheme.SUCCESS);
                 submitVoteIfReady();
+                showStep();
+                break;
+            case ROOM_READY:
+                roomReady = true;
                 showStep();
                 break;
             case PLAYER_COORDINATE:
@@ -507,6 +539,13 @@ public class LobbyScreen extends ScreenAdapter {
                 roster.remove(packet.getID());
                 break;
             case ERROR:
+                if (localPlayerId >= 0) {
+                    startRequested = false;
+                    lobbyStatusLabel.setText(packet.getMessage());
+                    lobbyStatusLabel.setColor(FantasyUiTheme.ERROR);
+                    showStep();
+                    break;
+                }
                 joined = false;
                 voteSent = false;
                 step = Step.RACE;

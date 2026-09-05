@@ -100,6 +100,14 @@ public class LobbyStateService {
         return Optional.of(voteResolver.resolve(votes.values()));
     }
 
+    /** Locks this lobby when the room starts a test match without voting. */
+    public synchronized void startTesting() {
+        if (matchStarted) throw new IllegalArgumentException("A match is already in progress.");
+        if (players.isEmpty()) throw new IllegalArgumentException("Join before starting a test.");
+        matchStarted = true;
+        votes.clear();
+    }
+
     public synchronized LobbyPlayer remove(int playerId) {
         votes.remove(playerId);
         return players.remove(playerId);

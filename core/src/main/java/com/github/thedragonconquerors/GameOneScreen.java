@@ -73,6 +73,7 @@ public class GameOneScreen extends ScreenAdapter {
     private final Map<Integer, Player> playersById = new HashMap<>();
     private int localPlayerId;
     private boolean receivingInitialPlayerList = false;
+    private boolean postMatchShown;
 
     private PlayerRenderer playerRenderer;
     private MouseInputHandler mouseInputHandler;
@@ -162,6 +163,11 @@ public class GameOneScreen extends ScreenAdapter {
 
     @Override
     public void render(float delta) {
+        if (initialMatchState != null && initialMatchState.isTestingMode()
+            && pendingTargetAction == null && Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            game.returnToMenu();
+            return;
+        }
         movementSystem.update(localPlayer, delta);
         for (Player enemy : enemyPlayers) movementSystem.update(enemy, delta);
 
@@ -249,8 +255,8 @@ public class GameOneScreen extends ScreenAdapter {
             hudRenderer.showFeedback("Wait for your turn before moving.");
             return;
         }
-        if (localPlayer.getMovementController().isMoving()) {
-            hudRenderer.showFeedback("Finish the current move first.");
+        if (anyPlayerMoving()) {
+            hudRenderer.showFeedback("Wait for the current movement animation to finish.");
             return;
         }
         networkClient.move(localPlayerId, targetPosition);
@@ -329,8 +335,8 @@ public class GameOneScreen extends ScreenAdapter {
             hudRenderer.showFeedback("A defeated player cannot act.");
             return;
         }
-        if (localPlayer.getMovementController().isMoving()) {
-            hudRenderer.showFeedback("Finish moving before using an ability.");
+        if (anyPlayerMoving()) {
+            hudRenderer.showFeedback("Wait for movement to finish before using an ability.");
             return;
         }
         if (localPlayer.isActionUsed()) {
@@ -465,17 +471,28 @@ public class GameOneScreen extends ScreenAdapter {
             }
 
             previousHp.put(player.getId(), player.getStats().getHp());
+            long previousMovement = player.getMovementSequence();
             Vector2 authoritativePosition = playerState.getPosition();
             player.applyCombatState(playerState);
-            if (authoritativePosition != null
-                && !player.getPosition().epsilonEquals(authoritativePosition, 0.02f)) {
-                movementSystem.setAuthoritativeDestination(player,
-                    new Vector2(authoritativePosition), playerState.getRemainingMovement());
+            if (authoritativePosition != null && previousMovement != playerState.getMovementSequence()) {
+                if (previousMovement < 0 || playerState.getMovementPath() == null || playerState.getMovementPath().isEmpty()) {
+                    player.getMovementController().stopMoving();
+                    player.setPosition(authoritativePosition.x, authoritativePosition.y);
+                } else {
+                    player.getMovementController().setAuthoritativePath(player.getPosition(),
+                        playerState.getMovementPath(), playerState.getRemainingMovement());
+                }
             }
         }
 
         for (Player player : new ArrayList<>(enemyPlayers)) {
             if (!incoming.containsKey(player.getId())) removeEnemyPlayer(player.getId());
+        }
+        if (navGrid != null) {
+            List<Vector2> occupied = state.getPlayers().stream()
+                .filter(other -> other.getId() != localPlayerId && other.getHp() > 0)
+                .map(PlayerCombatState::getPosition).filter(java.util.Objects::nonNull).toList();
+            navGrid.setOccupied(occupied);
         }
 
         Player actor = state.getLastActorId() == localPlayerId
@@ -510,6 +527,11 @@ public class GameOneScreen extends ScreenAdapter {
             String result = state.getWinningTeam() == 0 ? "Match ended in a draw."
                 : state.getWinningTeam() == teamIndex ? "Your team wins!" : "Your team was defeated.";
             hudRenderer.showFeedback(result);
+            if (!postMatchShown) {
+                postMatchShown = true;
+                Gdx.app.postRunnable(() -> game.showPostMatch(teamIndex, chosenBuild,
+                    environment, localPlayerId, state));
+            }
         }
     }
 
@@ -536,16 +558,24 @@ public class GameOneScreen extends ScreenAdapter {
             hudRenderer.showFeedback("It is not your turn.");
             return;
         }
-        if (localPlayer.getMovementController().isMoving()) {
-            hudRenderer.showFeedback("Finish moving before ending the turn.");
+        if (anyPlayerMoving()) {
+            hudRenderer.showFeedback("Wait for movement to finish before ending the turn.");
             return;
         }
         networkClient.endTurn(localPlayerId);
     }
 
+    private boolean anyPlayerMoving() {
+        return localPlayer.getMovementController().isMoving()
+            || enemyPlayers.stream().anyMatch(player -> player.getMovementController().isMoving());
+    }
+
     @Override
     public void resize(int width, int height) {
-        viewport.update(width, height, true);
+        int bottom = Math.round(HudRenderer.BOTTOM_HEIGHT * width / HudRenderer.VIRTUAL_WIDTH);
+        int top = Math.round(HudRenderer.TOP_HEIGHT * width / HudRenderer.VIRTUAL_WIDTH);
+        viewport.update(width, Math.max(1, height - bottom - top), true);
+        viewport.setScreenY(viewport.getScreenY() + bottom);
     }
 
     @Override

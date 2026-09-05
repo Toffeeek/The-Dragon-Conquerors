@@ -30,12 +30,12 @@ class BattlefieldDefinitionTest {
     @Test
     void canyonChasmIsLethalAndBlocksPaths() {
         BattlefieldDefinition canyon = BattlefieldDefinition.forEnvironment(Environment.CANYON);
-        Vector2 chasm = new Vector2(10f, 8f);
+        Vector2 chasm = new Vector2(13f, 4f);
         assertTrue(canyon.isLethalFall(chasm));
         assertFalse(canyon.isWalkable(chasm));
         assertTrue(canyon.pathCrossesLethalFall(
-            new Vector2(8f, 8f), new Vector2(14f, 8f)));
+            new Vector2(8f, 4f), new Vector2(17f, 4f)));
         assertFalse(canyon.pathIsWalkable(
-            new Vector2(8f, 8f), new Vector2(14f, 8f)));
+            new Vector2(8f, 4f), new Vector2(17f, 4f)));
     }
 }

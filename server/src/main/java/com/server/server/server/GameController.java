@@ -5,10 +5,12 @@ import com.server.server.combat.CombatCommandResult;
 import com.server.server.matchmaking.MatchRoom;
 import com.server.server.matchmaking.RoomAssignment;
 import com.server.server.matchmaking.RoomRegistry;
+import com.server.server.matchmaking.RematchDecision;
 import com.server.server.selection.LobbyPlayer;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.Packet;
 import com.shared.shared.model.world.Environment;
+import com.shared.shared.network.MatchState;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -76,6 +78,7 @@ public class GameController {
         sendPrivate(sessionId, Packet.builder()
             .ID(player.getId())
             .roomId(room.getId())
+            .testingMode(room.isTestingMode())
             .connectedPlayers(room.getLobby().size())
             .action(Action.PRIVATE_JOIN_CONFIRMATION)
             .build());
@@ -106,6 +109,28 @@ public class GameController {
         if (joined != null) {
             broadcast(room, joined.toPacket(Action.JOIN, room.getLobby().size()));
             broadcastVoteUpdate(room);
+            sendPrivate(sessionId, Packet.builder().action(Action.ROOM_READY)
+                .ID(joined.getId()).roomId(room.getId()).testingMode(room.isTestingMode())
+                .connectedPlayers(room.getLobby().size()).build());
+        }
+    }
+
+    @MessageMapping("/game.startTestMatch")
+    public synchronized void startTestMatch(@Payload Packet packet,
+                                            SimpMessageHeaderAccessor headers) {
+        Optional<MatchRoom> assignedRoom = authenticatedRoom(headers);
+        Object playerId = headers.getSessionAttributes().get(PLAYER_ID_ATTRIBUTE);
+        if (assignedRoom.isEmpty() || !(playerId instanceof Integer)
+            || packet == null || packet.getID() != (Integer) playerId) return;
+        MatchRoom room = assignedRoom.get();
+        try {
+            MatchState state = room.startTestMatch((Integer) playerId);
+            broadcast(room, Packet.builder().action(Action.MATCH_START)
+                .environment(state.getEnvironment()).matchState(state)
+                .connectedPlayers(room.getLobby().size()).build());
+        } catch (IllegalArgumentException exception) {
+            sendPrivate(headers.getSessionId(), Packet.builder().action(Action.ERROR)
+                .message(exception.getMessage()).build());
         }
     }
 
@@ -118,6 +143,7 @@ public class GameController {
             || ((Integer) playerId) != packet.getID()) return;
 
         MatchRoom room = assignedRoom.get();
+        if (room.isTestingMode()) return;
         if (!room.isReady(headers.getSessionId())) return;
         try {
             room.getLobby().recordVote(packet.getID(), packet.getEnvironment());
@@ -134,6 +160,42 @@ public class GameController {
             start.setMatchState(initialState);
             broadcast(room, start);
         });
+    }
+
+    @MessageMapping("/game.voteRematch")
+    public synchronized void voteRematch(@Payload Packet packet,
+                                         SimpMessageHeaderAccessor headers) {
+        Optional<MatchRoom> assignedRoom = authenticatedRoom(headers);
+        Object playerId = headers.getSessionAttributes().get(PLAYER_ID_ATTRIBUTE);
+        if (assignedRoom.isEmpty() || !(playerId instanceof Integer)
+            || packet == null || ((Integer) playerId) != packet.getID()) return;
+
+        MatchRoom room = assignedRoom.get();
+        RematchDecision decision = room.requestRematch((Integer) playerId);
+        if (!decision.isAccepted()) {
+            sendPrivate(headers.getSessionId(), Packet.builder()
+                .action(Action.ERROR).message(decision.getError()).build());
+            return;
+        }
+
+        broadcast(room, Packet.builder()
+            .action(Action.REMATCH_UPDATE)
+            .connectedPlayers(decision.getRequiredVotes())
+            .rematchVotes(decision.getVotes())
+            .message(decision.getVotes() + "/" + decision.getRequiredVotes()
+                + " players are ready for a rematch.")
+            .build());
+
+        if (decision.isStarted()) {
+            MatchState initialState = decision.getState();
+            broadcast(room, Packet.builder()
+                .action(Action.REMATCH_START)
+                .environment(initialState.getEnvironment())
+                .connectedPlayers(room.getLobby().size())
+                .rematchVotes(0)
+                .matchState(initialState)
+                .build());
+        }
     }
 
     private Optional<MatchRoom> authenticatedRoom(SimpMessageHeaderAccessor headers) {
@@ -166,6 +228,7 @@ public class GameController {
 
     private Packet withRoom(Packet packet, MatchRoom room) {
         packet.setRoomId(room.getId());
+        packet.setTestingMode(room.isTestingMode());
         return packet;
     }
 

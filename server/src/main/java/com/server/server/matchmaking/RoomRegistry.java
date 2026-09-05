@@ -7,6 +7,8 @@ import com.server.server.selection.LobbyStateService;
 import com.shared.shared.model.Packet;
 import com.shared.shared.network.MatchState;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -16,12 +18,20 @@ import java.util.Optional;
 @Service
 public class RoomRegistry {
     private final EnvironmentVoteResolver voteResolver;
+    private final boolean testingMode;
     private final Map<String, MatchRoom> rooms = new LinkedHashMap<>();
     private final Map<String, String> sessionRooms = new LinkedHashMap<>();
     private int nextRoomNumber = 1;
 
     public RoomRegistry(EnvironmentVoteResolver voteResolver) {
+        this(voteResolver, false);
+    }
+
+    @Autowired
+    public RoomRegistry(EnvironmentVoteResolver voteResolver,
+                        @Value("${game.testing-mode:true}") boolean testingMode) {
         this.voteResolver = voteResolver;
+        this.testingMode = testingMode;
     }
 
     public synchronized RoomAssignment assign(Packet selection, String sessionId) {
@@ -39,9 +49,11 @@ public class RoomRegistry {
             .findFirst()
             .orElseGet(this::createRoom);
 
-        LobbyPlayer player = room.getLobby().addPlayer(selection, sessionId);
-        sessionRooms.put(sessionId, room.getId());
-        return new RoomAssignment(room, player);
+        synchronized (room) {
+            LobbyPlayer player = room.getLobby().addPlayer(selection, sessionId);
+            sessionRooms.put(sessionId, room.getId());
+            return new RoomAssignment(room, player);
+        }
     }
 
     public synchronized Optional<MatchRoom> room(String roomId) {
@@ -57,13 +69,15 @@ public class RoomRegistry {
         MatchRoom room = rooms.get(roomId);
         if (room == null) return null;
 
-        room.removeSession(sessionId);
-        LobbyPlayer removed = room.getLobby().remove(playerId);
-        if (removed == null || !removed.getSessionId().equals(sessionId)) return null;
-        MatchState matchState = room.getMatches().disconnect(playerId);
-        RoomDisconnectResult result = new RoomDisconnectResult(room, playerId, matchState);
-        if (room.getLobby().size() == 0) rooms.remove(roomId);
-        return result;
+        synchronized (room) {
+            room.removePlayer(playerId, sessionId);
+            LobbyPlayer removed = room.getLobby().remove(playerId);
+            if (removed == null || !removed.getSessionId().equals(sessionId)) return null;
+            MatchState matchState = room.getMatches().disconnect(playerId);
+            RoomDisconnectResult result = new RoomDisconnectResult(room, playerId, matchState);
+            if (room.getLobby().size() == 0) rooms.remove(roomId);
+            return result;
+        }
     }
 
     public synchronized int roomCount() {
@@ -71,7 +85,7 @@ public class RoomRegistry {
     }
 
     private MatchRoom createRoom() {
-        MatchRoom room = new MatchRoom("room-" + nextRoomNumber++, voteResolver);
+        MatchRoom room = new MatchRoom("room-" + nextRoomNumber++, voteResolver, testingMode);
         rooms.put(room.getId(), room);
         return room;
     }

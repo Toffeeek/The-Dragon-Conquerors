@@ -74,8 +74,10 @@ public class NetworkClient
                 if (p.getAction() == Action.PRIVATE_JOIN_CONFIRMATION
                     && p.getRoomId() != null && !p.getRoomId().isBlank()) {
                     subscribeToRoom(p.getRoomId());
+                    handlePacket(p);
                     session.send("/app/game.roomReady", Packet.builder()
                         .ID(p.getID()).roomId(p.getRoomId()).action(Action.ROOM_READY).build());
+                    return;
                 }
                 handlePacket(p);
             }
@@ -166,6 +168,13 @@ public class NetworkClient
             .build());
     }
 
+    public void startTestMatch(int playerId) {
+        if (session != null && session.isConnected() && playerId >= 0) {
+            session.send("/app/game.startTestMatch", Packet.builder()
+                .ID(playerId).roomId(roomId).action(Action.START_TEST_MATCH).build());
+        }
+    }
+
     public void useAbility(int playerId, AbilityType ability, int targetPlayerId,
                            Vector2 targetPosition)
     {
@@ -181,6 +190,18 @@ public class NetworkClient
     public void endTurn(int playerId)
     {
         send(Packet.builder().ID(playerId).action(Action.END_TURN).build());
+    }
+
+    public void requestRematch(int playerId)
+    {
+        if (session != null && session.isConnected() && playerId >= 0)
+        {
+            session.send("/app/game.voteRematch", Packet.builder()
+                .ID(playerId)
+                .roomId(roomId)
+                .action(Action.REMATCH_VOTE)
+                .build());
+        }
     }
 
     public void disconnect() {

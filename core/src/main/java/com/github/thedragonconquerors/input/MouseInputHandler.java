@@ -39,6 +39,9 @@ public class MouseInputHandler extends InputAdapter {
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
         if (!isLocalPlayerTurn || button != Input.Buttons.LEFT) return false;
+        int bottomY = com.badlogic.gdx.Gdx.graphics.getHeight() - screenY;
+        if (screenX < viewport.getScreenX() || screenX >= viewport.getScreenX() + viewport.getScreenWidth()
+            || bottomY < viewport.getScreenY() || bottomY >= viewport.getScreenY() + viewport.getScreenHeight()) return false;
 
         unprojectScratch.set(screenX, screenY, 0f);
         camera.unproject(unprojectScratch,

@@ -47,8 +47,32 @@ Combat controls:
 - Green targets are in range; red targets are outside the action's range.
 - Press `Esc` to cancel target selection.
 - While target selection is active, clicks are consumed by targeting and do not move the player.
+- Each turn grants **1 action point (AP)** plus your class/race movement allowance.
+- Every accepted ability spends 1 AP, including abilities with no mana cost; rejected actions spend nothing.
+- Movement and actions can be used in either order. When both reach zero, the server advances the turn automatically.
+- Press `E` to end a turn early. In solo testing, an automatic turn end refreshes your next turn's resources.
+- Click a reachable ground destination to move. Longer routes stop at your movement limit;
+  water, cliff terrain, map edges, and living players block movement.
 
-## Multiplayer selection flow
+## Temporary testing flow (enabled by default)
+
+Map voting and the four-player minimum are temporarily bypassed:
+
+1. Choose a team, class, and race, then click **JOIN GAME**.
+2. Click **START TEST** to enter Canyon immediately with 1-4 connected players.
+   Friends must join before starting; the two-player-per-team limit still applies.
+3. Move, use available abilities, and end turns as usual. Solo or single-team tests
+   stay playable instead of immediately declaring a winner. Tests that start with
+   both teams retain normal victory rules.
+
+Press `Esc` during a test to return to the menu and try another build. If targeting
+is active, the first `Esc` cancels targeting. Solo tests do not add bots or enemies.
+
+To restore map voting later, set `game.testing-mode=false` in
+`server/src/main/resources/application.properties` and restart the server. Restart
+the server and game after updating to use the new testing flow.
+
+## Multiplayer selection flow (when testing mode is disabled)
 
 After connecting, each client completes three server-backed lobby steps:
 
@@ -79,22 +103,46 @@ hazards, lethal falls, and path validation. Both the Spring Boot server and libG
 that geometry, so the navigation preview agrees with authoritative command validation.
 
 - Bog poison pools are walkable hazards that apply poison when a combatant begins a turn in one.
-- Lava applies the environment's global burn effect at turn start and contains impassable fissures.
+- Lava applies the environment's global burn effect at turn start.
 - Canyon chasms block ordinary movement; a forced push across a lethal edge defeats the target.
 
-Each environment currently uses a dedicated placeholder TMX map plus a colored hazard overlay.
-The rules are authoritative and complete for this slice; detailed map artwork and Tiled object
-layers can replace the placeholders without changing the combat protocol.
+Terrain collision is loaded from the same TMX tile data used for the map artwork.
+`assets/maps-new/tileset.tsx` marks terrain types and declares the walkable grass palette.
+The build generates a pixel collision mask directly from `tileset.png`; mixed shoreline tiles
+are no longer blocked as full squares. Water and cliff pixels block a small circular foot collider
+(0.10 world units), and path sweeps prevent cutting through thin edges. Rotated/flipped tiles
+apply the same transform to artwork and collision. Navigation uses a finer 0.125-unit grid.
+The shared JAR packages the generated mask for both server and client; rebuild and restart both
+after editing maps or the tileset. Update `walkableColors` when introducing a new ground palette.
+There are no synthetic black rectangles or red collision outlines over Canyon.
+Bog's poison overlay only shades walkable ground. These maps still share placeholder artwork.
 
 ## Authoritative combat
 
-Once voting completes, the Spring Boot server creates the canonical combat state. Clients
+Once a test starts or voting completes, the Spring Boot server creates the canonical combat state. Clients
 send only movement, ability, and end-turn intents; the server validates the connection's
 player identity, active turn, stamina, battlefield bounds, player collision, ability
 ownership, target team, range, mana, action availability, and cooldown. Accepted commands
 are resolved through the shared combat engine and broadcast as full match snapshots.
 
-Snapshots synchronize all four players' positions, HP, mana, mutable stats, status effects,
+Snapshots synchronize all participants' positions, HP, mana, mutable stats, status effects,
 cooldowns, stamina, action usage, active player, round, and victory state. Turn order is
 Speed descending with player ID as a deterministic tie-break. The client no longer executes
-damage or healing locally.
+damage or healing locally. The server computes collision-safe routes, charges actual path length,
+and sends the exact waypoints to clients. Movement animation does not spend resources a second time.
+
+## Match completion and rematches
+
+The final authoritative snapshot disables combat input and opens a dedicated victory,
+defeat, or draw screen. Players can return to the menu immediately or submit one rematch
+vote. Vote totals remain room-scoped and are broadcast to every connected participant.
+
+In testing mode, a rematch requires only the players still connected to the room.
+If someone leaves, existing rematch votes are cleared so the remaining players can
+agree to restart with the smaller party.
+
+With testing mode disabled, a rematch starts only after all four original players
+agree, preserving the 2v2 format; a disconnect disables rematching.
+The server keeps the same room, builds, teams, and environment but constructs a new match,
+resetting positions, HP, mana, effects, cooldowns, action resources, round count, and turn
+order. Empty completed rooms are removed by the normal room lifecycle cleanup.

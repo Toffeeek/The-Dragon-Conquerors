@@ -28,7 +28,9 @@ public final class ServerCombatant implements Combatant {
     private final List<StatusEffect> activeEffects = new ArrayList<>();
     private float maxMovement;
     private float remainingMovement;
-    private boolean actionUsed;
+    private int actionPoints;
+    private long movementSequence;
+    private List<Vector2> movementPath = List.of();
 
     public ServerCombatant(LobbyPlayer player) {
         this(player, player.getPosition());
@@ -61,8 +63,26 @@ public final class ServerCombatant implements Combatant {
     }
 
     public float getRemainingMovement() { return remainingMovement; }
-    public boolean isActionUsed() { return actionUsed; }
-    public void markActionUsed() { actionUsed = true; }
+    public boolean isActionUsed() { return actionPoints == 0; }
+    public int getActionPoints() { return actionPoints; }
+    public void markActionUsed() { actionPoints = 0; }
+    public boolean resourcesExhausted() {
+        return actionPoints == 0 && remainingMovement <= com.shared.shared.model.world.BattlefieldNavigation.EPSILON;
+    }
+
+    public void moveAlong(List<Vector2> path) {
+        float distance = com.shared.shared.model.world.BattlefieldNavigation.length(position, path);
+        movementPath = path.stream().map(Vector2::new).toList();
+        position.set(path.get(path.size() - 1));
+        remainingMovement = Math.max(0f, remainingMovement - distance);
+        if (remainingMovement <= com.shared.shared.model.world.BattlefieldNavigation.EPSILON) remainingMovement = 0f;
+        movementSequence++;
+    }
+
+    public void markDisplaced() {
+        movementSequence++;
+        movementPath = List.of();
+    }
 
     public void moveTo(Vector2 destination) {
         float distance = position.dst(destination);
@@ -73,7 +93,7 @@ public final class ServerCombatant implements Combatant {
     private void refreshTurnResources() {
         maxMovement = StatCalculator.deriveMaxMovementDistance(stats);
         remainingMovement = maxMovement;
-        actionUsed = false;
+        actionPoints = 1;
     }
 
     public PlayerCombatState snapshot(CombatContext context, boolean activeTurn) {
@@ -105,7 +125,10 @@ public final class ServerCombatant implements Combatant {
             .wisdom(stats.getWisdom())
             .remainingMovement(remainingMovement)
             .maxMovement(maxMovement)
-            .actionUsed(actionUsed)
+            .actionUsed(isActionUsed())
+            .actionPoints(actionPoints)
+            .movementSequence(movementSequence)
+            .movementPath(movementPath.stream().map(Vector2::new).toList())
             .activeTurn(activeTurn)
             .effects(effectCopies)
             .cooldowns(context.cooldownsFor(this).snapshot())

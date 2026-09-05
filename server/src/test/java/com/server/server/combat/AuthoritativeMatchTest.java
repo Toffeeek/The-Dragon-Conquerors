@@ -8,6 +8,7 @@ import com.shared.shared.model.Race;
 import com.shared.shared.model.ability.AbilityType;
 import com.shared.shared.model.combat.AbilityResolver;
 import com.shared.shared.model.world.Environment;
+import com.shared.shared.network.MatchState;
 import com.shared.shared.network.PlayerCombatState;
 import org.junit.jupiter.api.Test;
 
@@ -58,16 +59,19 @@ class AuthoritativeMatchTest {
     @Test
     void movementIsBoundedByStaminaAndPlayerCollision() {
         AuthoritativeMatch match = match();
-        CombatCommandResult tooFar = match.move(0, new Vector2(20f, 5f));
-        assertFalse(tooFar.isAccepted());
+        AuthoritativeMatch budgetMatch = match();
+        CombatCommandResult tooFar = budgetMatch.move(0, new Vector2(20f, 5f));
+        assertTrue(tooFar.isAccepted(), "A long legal route stops at the movement limit");
+        assertEquals(0f, player(tooFar, 0).getRemainingMovement(), 0.001f);
+        assertFalse(player(tooFar, 0).getPosition().epsilonEquals(new Vector2(20f, 5f), 0.01f));
 
         CombatCommandResult occupied = match.move(0, new Vector2(6f, 5f));
         assertFalse(occupied.isAccepted());
         assertTrue(occupied.getError().contains("occupies"));
 
-        CombatCommandResult accepted = match.move(0, new Vector2(5f, 7f));
+        CombatCommandResult accepted = match.move(0, new Vector2(4f, 4f));
         assertTrue(accepted.isAccepted());
-        assertEquals(7f, player(accepted, 0).getPosition().y, 0.001f);
+        assertEquals(4f, player(accepted, 0).getPosition().y, 0.001f);
     }
 
     @Test
@@ -79,12 +83,27 @@ class AuthoritativeMatchTest {
         assertTrue(result.getError().contains("legal target"));
     }
 
+    @Test
+    void disconnectVictoryEndsTheMatchAndRejectsFurtherCommands() {
+        AuthoritativeMatch match = match();
+
+        match.disconnect(2);
+        MatchState victory = match.disconnect(3);
+
+        assertTrue(victory.isMatchOver());
+        assertEquals(1, victory.getWinningTeam());
+        assertEquals(-1, victory.getActivePlayerId());
+        CombatCommandResult afterVictory = match.endTurn(0);
+        assertFalse(afterVictory.isAccepted());
+        assertTrue(afterVictory.getError().contains("match is over"));
+    }
+
     private AuthoritativeMatch match() {
         List<LobbyPlayer> players = List.of(
             player(0, CharacterClass.WRAITH, Race.UNDEAD, 1, 5f, 5f),
-            player(1, CharacterClass.MAGE, Race.ELF, 1, 5f, 9f),
+            player(1, CharacterClass.MAGE, Race.ELF, 1, 7f, 8f),
             player(2, CharacterClass.PALADIN, Race.HUMAN, 2, 6f, 5f),
-            player(3, CharacterClass.CLERIC, Race.DRAGONBORNE, 2, 6f, 9f));
+            player(3, CharacterClass.CLERIC, Race.DRAGONBORNE, 2, 8f, 8f));
         return new AuthoritativeMatch(players, Environment.CANYON,
             new AbilityResolver(19L));
     }

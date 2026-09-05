@@ -46,7 +46,8 @@ public class MovementSystem {
         List<Vector2> path = navGrid.findPath(player.getPosition(), clickedWorldPos, remaining);
         if (path.isEmpty()) return null;
         List<Vector2> clamped = clampPathToDistance(player.getPosition(), path, remaining);
-        return clamped.isEmpty() ? null : new Vector2(clamped.get(clamped.size() - 1));
+        // Send the original intent: the server calculates and charges the whole route.
+        return clamped.isEmpty() ? null : new Vector2(clickedWorldPos);
     }
 
     public void setAuthoritativeDestination(Player player, Vector2 destination,
@@ -115,7 +116,7 @@ public class MovementSystem {
         MovementController controller = player.getMovementController();
 
         if(!controller.isMoving())  return;
-        if(controller.getRemainingMovementDistance() <= 0){
+        if(!controller.isAuthoritativePath() && controller.getRemainingMovementDistance() <= 0){
             controller.stopMoving();
             return;
         }
@@ -132,7 +133,7 @@ public class MovementSystem {
         // Arrived at this waypoint — advance to next
         if (distToWaypoint <= ARRIVAL_THRESHOLD) {
             player.setPosition(nextWaypoint.x, nextWaypoint.y);
-            controller.deductDistance(distToWaypoint);
+            if (!controller.isAuthoritativePath()) controller.deductDistance(distToWaypoint);
             controller.advanceWaypoint();
             return;
         }
@@ -140,14 +141,14 @@ public class MovementSystem {
         // Move toward current waypoint
         float stepDistance = player.getSpeed() * delta;
         stepDistance = Math.min(stepDistance, distToWaypoint);
-        stepDistance = Math.min(stepDistance, controller.getRemainingMovementDistance());
+        if (!controller.isAuthoritativePath()) stepDistance = Math.min(stepDistance, controller.getRemainingMovementDistance());
 
         Vector2 dir = new Vector2(nextWaypoint).sub(currentPos).nor();
         player.setPosition(
             currentPos.x + dir.x * stepDistance,
             currentPos.y + dir.y * stepDistance
         );
-        controller.deductDistance(stepDistance);
+        if (!controller.isAuthoritativePath()) controller.deductDistance(stepDistance);
     }
 
 }

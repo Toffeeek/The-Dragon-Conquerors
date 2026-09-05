@@ -15,7 +15,12 @@ public class MatchService {
     private AuthoritativeMatch match;
 
     public synchronized MatchState start(List<LobbyPlayer> players, Environment environment) {
-        match = new AuthoritativeMatch(players, environment);
+        return start(players, environment, false);
+    }
+
+    public synchronized MatchState start(List<LobbyPlayer> players, Environment environment,
+                                         boolean testingMode) {
+        match = new AuthoritativeMatch(players, environment, testingMode);
         return match.snapshot();
     }
 
@@ -47,6 +52,18 @@ public class MatchService {
 
     public synchronized boolean isRunning() {
         return match != null;
+    }
+
+    public synchronized boolean isComplete() {
+        return match != null && match.snapshot().isMatchOver();
+    }
+
+    /** Replaces a completed match with pristine combat state on the same battlefield. */
+    public synchronized MatchState restart(List<LobbyPlayer> players) {
+        if (!isComplete()) throw new IllegalStateException("The current match is not over.");
+        Environment environment = match.snapshot().getEnvironment();
+        match = new AuthoritativeMatch(players, environment, match.snapshot().isTestingMode());
+        return match.snapshot();
     }
 
     private Vector2 copy(Vector2 value) {

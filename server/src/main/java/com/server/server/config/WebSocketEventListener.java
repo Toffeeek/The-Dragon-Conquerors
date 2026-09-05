@@ -48,6 +48,20 @@ public class WebSocketEventListener {
                 .roomId(room.getId())
                 .matchState(result.getMatchState())
                 .build());
+
+            if (result.getMatchState().isMatchOver()) {
+                messages.convertAndSend(room.destination(), Packet.builder()
+                    .action(Action.REMATCH_UPDATE)
+                    .ID((Integer) playerId)
+                    .roomId(room.getId())
+                    .connectedPlayers(room.getLobby().size())
+                    .rematchVotes(room.rematchVoteCount())
+                    .testingMode(room.isTestingMode())
+                    .message(room.isTestingMode()
+                        ? "The remaining players can vote to restart the test."
+                        : "A 2v2 rematch requires all four players to remain connected.")
+                    .build());
+            }
         }
 
         Map<Environment, Integer> counts = room.getLobby().voteCounts();

@@ -41,6 +41,11 @@ public class PlayerCombatState {
     private float remainingMovement;
     private float maxMovement;
     private boolean actionUsed;
+    @Builder.Default
+    private int actionPoints = 1;
+    private long movementSequence;
+    @Builder.Default
+    private List<Vector2> movementPath = new ArrayList<>();
     private boolean activeTurn;
     @Builder.Default
     private List<StatusEffect> effects = new ArrayList<>();

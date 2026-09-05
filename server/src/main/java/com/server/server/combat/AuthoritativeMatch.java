@@ -12,6 +12,7 @@ import com.shared.shared.model.combat.TurnQueue;
 import com.shared.shared.model.combat.TurnStartReport;
 import com.shared.shared.model.world.Environment;
 import com.shared.shared.model.world.BattlefieldDefinition;
+import com.shared.shared.model.world.BattlefieldNavigation;
 import com.shared.shared.network.MatchState;
 import com.shared.shared.network.PlayerCombatState;
 
@@ -29,6 +30,9 @@ public final class AuthoritativeMatch {
     private final CombatContext context;
     private final AbilityResolver resolver;
     private final BattlefieldDefinition battlefield;
+    private final BattlefieldNavigation navigation;
+    private final boolean testingMode;
+    private final boolean singleTeamPractice;
     private int activePlayerId = -1;
     private boolean matchOver;
     private int winningTeam;
@@ -40,6 +44,11 @@ public final class AuthoritativeMatch {
         this(lobbyPlayers, environment, new AbilityResolver(), true);
     }
 
+    public AuthoritativeMatch(List<LobbyPlayer> lobbyPlayers, Environment environment,
+                              boolean testingMode) {
+        this(lobbyPlayers, environment, new AbilityResolver(), true, testingMode);
+    }
+
     AuthoritativeMatch(List<LobbyPlayer> lobbyPlayers, Environment environment,
                        AbilityResolver resolver) {
         this(lobbyPlayers, environment, resolver, false);
@@ -47,10 +56,20 @@ public final class AuthoritativeMatch {
 
     AuthoritativeMatch(List<LobbyPlayer> lobbyPlayers, Environment environment,
                        AbilityResolver resolver, boolean assignBattlefieldSpawns) {
+        this(lobbyPlayers, environment, resolver, assignBattlefieldSpawns, false);
+    }
+
+    private AuthoritativeMatch(List<LobbyPlayer> lobbyPlayers, Environment environment,
+                               AbilityResolver resolver, boolean assignBattlefieldSpawns,
+                               boolean testingMode) {
         if (lobbyPlayers == null || lobbyPlayers.isEmpty()) {
             throw new IllegalArgumentException("A match needs players");
         }
         this.battlefield = BattlefieldDefinition.forEnvironment(environment);
+        this.navigation = new BattlefieldNavigation(battlefield);
+        this.testingMode = testingMode;
+        this.singleTeamPractice = testingMode && lobbyPlayers.stream()
+            .map(LobbyPlayer::getTeamIndex).distinct().count() == 1;
         Map<Integer, Integer> teamSlots = new LinkedHashMap<>();
         for (LobbyPlayer player : lobbyPlayers) {
             int slot = teamSlots.getOrDefault(player.getTeamIndex(), 0);
@@ -71,15 +90,7 @@ public final class AuthoritativeMatch {
         if (!battlefield.isWalkable(destination)) {
             return CombatCommandResult.rejected("Destination is blocked or unsafe.");
         }
-        if (!battlefield.pathIsWalkable(actor.getPosition(), destination)) {
-            return CombatCommandResult.rejected("Movement path crosses a wall or cliff.");
-        }
-
-        float distance = actor.getPosition().dst(destination);
-        if (distance <= MOVE_EPSILON) return CombatCommandResult.rejected("Choose a different destination.");
-        if (distance > actor.getRemainingMovement() + MOVE_EPSILON) {
-            return CombatCommandResult.rejected("Not enough stamina for that move.");
-        }
+        if (actor.getPosition().dst(destination) <= MOVE_EPSILON) return CombatCommandResult.rejected("Choose a different destination.");
         for (ServerCombatant other : players.values()) {
             if (other != actor && other.isAlive()
                 && other.getPosition().dst(destination) < PLAYER_COLLISION_RADIUS) {
@@ -87,10 +98,16 @@ public final class AuthoritativeMatch {
             }
         }
 
-        actor.moveTo(destination);
+        List<Vector2> occupied = players.values().stream().filter(other -> other != actor && other.isAlive())
+            .map(ServerCombatant::getPosition).toList();
+        List<Vector2> path = navigation.findPath(actor.getPosition(), destination, actor.getRemainingMovement(), occupied);
+        if (path.isEmpty()) return CombatCommandResult.rejected("No movement points or no safe route around terrain and players.");
+        float distance = BattlefieldNavigation.length(actor.getPosition(), path);
+        actor.moveAlong(path);
         lastActorId = playerId;
         lastAbility = null;
         lastMessage = actor.getUsername() + " moves " + String.format("%.1f", distance) + " units.";
+        autoEndTurn(actor);
         return CombatCommandResult.accepted(snapshot());
     }
 
@@ -105,6 +122,10 @@ public final class AuthoritativeMatch {
         if (ability.getTargetType().targetsGround() && !battlefield.isWalkable(targetPoint)) {
             return CombatCommandResult.rejected("Target tile is blocked or unsafe.");
         }
+        if (ability == AbilityType.TELEPORT && players.values().stream().anyMatch(other -> other != actor
+            && other.isAlive() && other.getPosition().dst(targetPoint) < PLAYER_COLLISION_RADIUS)) {
+            return CombatCommandResult.rejected("Another player occupies that tile.");
+        }
 
         ServerCombatant target = players.get(targetPlayerId);
         Map<Integer, Vector2> positionsBefore = positions();
@@ -118,7 +139,10 @@ public final class AuthoritativeMatch {
         lastAbility = ability;
         lastMessage = outcome.describe();
         resolvePushes(outcome, positionsBefore);
-        finishIfOver();
+        for (ServerCombatant player : players.values()) {
+            if (!player.getPosition().epsilonEquals(positionsBefore.get(player.getId()), 0.001f)) player.markDisplaced();
+        }
+        if (!finishIfOver()) autoEndTurn(actor);
         return CombatCommandResult.accepted(snapshot());
     }
 
@@ -153,6 +177,7 @@ public final class AuthoritativeMatch {
             .roundNumber(context.getTurnQueue().getRoundNumber())
             .environment(context.getEnvironment())
             .matchOver(matchOver)
+            .testingMode(testingMode)
             .winningTeam(winningTeam)
             .message(lastMessage)
             .lastActorId(lastActorId)
@@ -164,7 +189,6 @@ public final class AuthoritativeMatch {
     public int getActivePlayerId() { return activePlayerId; }
 
     private void advanceTurn(String prefix) {
-        lastAbility = null;
         StringBuilder message = new StringBuilder(prefix == null ? "" : prefix);
         TurnQueue queue = context.getTurnQueue();
 
@@ -183,7 +207,7 @@ public final class AuthoritativeMatch {
             TurnStartReport report = context.beginTurn(next,
                 battlefield.isHazard(next.getPosition()));
             if (!report.isUneventful()) append(message, next.getUsername() + ": " + report.describe());
-            if (context.getTurnQueue().isMatchOver()) {
+            if (isBattleFinished()) {
                 lastMessage = message.toString();
                 finishIfOver();
                 return;
@@ -201,9 +225,15 @@ public final class AuthoritativeMatch {
         lastMessage = "No eligible combatant could take a turn.";
     }
 
+    private void autoEndTurn(ServerCombatant actor) {
+        if (!matchOver && actor.resourcesExhausted()) {
+            advanceTurn(lastMessage + " Action and movement points spent; turn ends automatically.");
+        }
+    }
+
     private boolean finishIfOver() {
         if (matchOver) return true;
-        if (!context.getTurnQueue().isMatchOver()) return false;
+        if (!isBattleFinished()) return false;
         matchOver = true;
         activePlayerId = -1;
         winningTeam = context.getTurnQueue().winningTeam();
@@ -212,6 +242,13 @@ public final class AuthoritativeMatch {
         lastMessage = lastMessage == null || lastMessage.isBlank()
             ? ending : lastMessage + " " + ending;
         return true;
+    }
+
+    private boolean isBattleFinished() {
+        // A practice session with no opponents must not immediately declare victory.
+        // Sessions that started with both teams retain normal victory/disconnect rules.
+        if (singleTeamPractice) return players.values().stream().noneMatch(Combatant::isAlive);
+        return context.getTurnQueue().isMatchOver();
     }
 
     private ServerCombatant activeActor(int playerId) {

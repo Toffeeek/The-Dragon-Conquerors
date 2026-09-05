@@ -33,6 +33,8 @@ public class Player implements Combatant {
     private final List<StatusEffect> activeEffects = new ArrayList<>();
     private final Map<String, Integer> cooldowns = new LinkedHashMap<>();
     private boolean actionUsed;
+    private int actionPoints = 1;
+    private long movementSequence = -1;
     private boolean activeTurn;
 
     public Player(int ID, String username, Vector2 position, CharacterClass characterClass) {
@@ -81,6 +83,8 @@ public class Player implements Combatant {
     @Override public List<StatusEffect> getActiveEffects() { return activeEffects; }
 
     public boolean isActionUsed() { return actionUsed; }
+    public int getActionPoints() { return actionPoints; }
+    public long getMovementSequence() { return movementSequence; }
 
     public boolean isActiveTurn() { return activeTurn; }
 
@@ -101,6 +105,8 @@ public class Player implements Combatant {
         stats.setInspiration(state.getInspiration());
         stats.setWisdom(state.getWisdom());
         actionUsed = state.isActionUsed();
+        actionPoints = state.getActionPoints();
+        movementSequence = state.getMovementSequence();
         activeTurn = state.isActiveTurn();
         activeEffects.clear();
         if (state.getEffects() != null) activeEffects.addAll(state.getEffects());

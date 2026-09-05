@@ -12,7 +12,8 @@ import java.util.Map;
 public final class BattlefieldDefinition {
     public static final float DEFAULT_WIDTH = 30f;
     public static final float DEFAULT_HEIGHT = 17f;
-    private static final float TRACE_STEP = 0.1f;
+    public static final float PLAYER_RADIUS = 0.10f;
+    private static final float TRACE_STEP = 1f / 32f;
     private static final Map<Environment, BattlefieldDefinition> DEFINITIONS =
         new EnumMap<>(Environment.class);
 
@@ -20,38 +21,24 @@ public final class BattlefieldDefinition {
         DEFINITIONS.put(Environment.BOG, new BattlefieldDefinition(Environment.BOG, List.of(
             zone(BattlefieldZoneType.HAZARD, 7f, 2f, 5f, 4f),
             zone(BattlefieldZoneType.HAZARD, 12.5f, 7f, 5f, 3f),
-            zone(BattlefieldZoneType.HAZARD, 19f, 11f, 4f, 4f),
-            zone(BattlefieldZoneType.BLOCKED, 14f, 0f, 2f, 5f),
-            zone(BattlefieldZoneType.BLOCKED, 14f, 12f, 2f, 5f),
-            zone(BattlefieldZoneType.BLOCKED, 23f, 5.5f, 2f, 2f))));
+            zone(BattlefieldZoneType.HAZARD, 19f, 11f, 4f, 4f))));
 
-        DEFINITIONS.put(Environment.LAVA, new BattlefieldDefinition(Environment.LAVA, List.of(
-            zone(BattlefieldZoneType.BLOCKED, 6f, 7f, 6f, 2f),
-            zone(BattlefieldZoneType.BLOCKED, 18f, 8f, 6f, 2f),
-            zone(BattlefieldZoneType.BLOCKED, 14f, 5f, 2f, 7f),
-            zone(BattlefieldZoneType.BLOCKED, 4f, 2f, 2f, 2f),
-            zone(BattlefieldZoneType.BLOCKED, 24f, 13f, 2f, 2f))));
-
-        DEFINITIONS.put(Environment.CANYON, new BattlefieldDefinition(Environment.CANYON, List.of(
-            zone(BattlefieldZoneType.LETHAL_FALL, 0f, 0f, 30f, 1f),
-            zone(BattlefieldZoneType.LETHAL_FALL, 0f, 16f, 30f, 1f),
-            zone(BattlefieldZoneType.LETHAL_FALL, 0f, 0f, 1f, 17f),
-            zone(BattlefieldZoneType.LETHAL_FALL, 29f, 0f, 1f, 17f),
-            zone(BattlefieldZoneType.LETHAL_FALL, 9f, 6f, 4f, 5f),
-            zone(BattlefieldZoneType.LETHAL_FALL, 17f, 6f, 4f, 5f),
-            zone(BattlefieldZoneType.BLOCKED, 14f, 7f, 2f, 3f))));
+        DEFINITIONS.put(Environment.LAVA, new BattlefieldDefinition(Environment.LAVA, List.of()));
+        DEFINITIONS.put(Environment.CANYON, new BattlefieldDefinition(Environment.CANYON, List.of()));
     }
 
     private final Environment environment;
     private final float width;
     private final float height;
     private final List<BattlefieldZone> zones;
+    private final TiledTerrain terrain;
 
     private BattlefieldDefinition(Environment environment, List<BattlefieldZone> zones) {
         this.environment = environment;
         this.width = DEFAULT_WIDTH;
         this.height = DEFAULT_HEIGHT;
         this.zones = Collections.unmodifiableList(zones);
+        this.terrain = new TiledTerrain(environment.name().toLowerCase(java.util.Locale.ROOT));
         validateSpawns();
     }
 
@@ -66,9 +53,8 @@ public final class BattlefieldDefinition {
     public List<BattlefieldZone> getZones() { return zones; }
 
     public Vector2 spawnFor(int teamIndex, int teamSlot) {
-        float x = teamIndex == 1 ? 2f : 28f;
-        float y = teamSlot <= 0 ? 5f : 12f;
-        return new Vector2(x, y);
+        if (teamIndex == 1) return teamSlot <= 0 ? new Vector2(2f, 5f) : new Vector2(4.5f, 12.5f);
+        return new Vector2(28f, teamSlot <= 0 ? 9f : 12f);
     }
 
     public boolean isInside(Vector2 point) {
@@ -81,18 +67,18 @@ public final class BattlefieldDefinition {
     }
 
     public boolean isLethalFall(Vector2 point) {
-        return !isInside(point) || contains(BattlefieldZoneType.LETHAL_FALL, point);
+        return !isInside(point) || "fall".equals(terrain.at(point.x, point.y));
     }
 
     public boolean isWalkable(Vector2 point) {
-        return isInside(point)
+        return isInside(point) && terrain.isWalkable(point.x, point.y, PLAYER_RADIUS)
             && !contains(BattlefieldZoneType.BLOCKED, point)
             && !contains(BattlefieldZoneType.LETHAL_FALL, point);
     }
 
     public boolean pathIsWalkable(Vector2 start, Vector2 end) {
         if (!isWalkable(start) || !isWalkable(end)) return false;
-        return trace(start, end, TraceMode.WALKABLE);
+        return terrain.segmentWalkable(start, end, PLAYER_RADIUS);
     }
 
     public boolean pathCrossesLethalFall(Vector2 start, Vector2 end) {

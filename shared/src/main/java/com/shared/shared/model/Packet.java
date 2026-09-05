@@ -20,6 +20,7 @@ public class Packet
     private int activePlayerID = -1;
     private String username;
     private String roomId;
+    private boolean testingMode;
     private Vector2 finalPosition;
     private Action action;
     private CharacterClass characterClass;
@@ -30,6 +31,7 @@ public class Packet
     private int bogVotes;
     private int lavaVotes;
     private int canyonVotes;
+    private int rematchVotes;
     private String message;
     private AbilityType ability;
     @Builder.Default

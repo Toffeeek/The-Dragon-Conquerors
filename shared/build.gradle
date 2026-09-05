@@ -33,6 +33,50 @@ dependencies {
 
 tasks.named('test') {
   useJUnitPlatform()
+  systemProperty 'terrain.assets', rootProject.file('assets/maps-new').absolutePath
+}
+
+// Generate CPU-only collision data from the actual artwork. ImageIO is build-time
+// only: neither the shared runtime nor the server needs graphics/native libraries.
+def terrainMaskDir = layout.buildDirectory.dir('generated/terrainMasks')
+tasks.register('generateTerrainMask') {
+  inputs.files(rootProject.file('assets/maps-new/tileset.png'), rootProject.file('assets/maps-new/tileset.tsx'))
+  outputs.dir(terrainMaskDir)
+  doLast {
+    def factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+    factory.setFeature('http://apache.org/xml/features/disallow-doctype-decl', true)
+    def document = factory.newDocumentBuilder().parse(rootProject.file('assets/maps-new/tileset.tsx'))
+    def properties = document.getElementsByTagName('property')
+    def colors = [] as Set
+    for (int i = 0; i < properties.length; i++) {
+      def property = properties.item(i)
+      if (property.getAttribute('name') == 'walkableColors') {
+        property.getAttribute('value').split(',').each { colors.add(Integer.parseInt(it.trim(), 16)) }
+      }
+    }
+    if (colors.isEmpty()) throw new GradleException('tileset.tsx must declare walkableColors')
+    def image = javax.imageio.ImageIO.read(rootProject.file('assets/maps-new/tileset.png'))
+    def output = terrainMaskDir.get().file('battlefields/terrain-mask.bin').asFile
+    output.parentFile.mkdirs()
+    output.withDataOutputStream { data ->
+      data.writeInt(image.width)
+      data.writeInt(image.height)
+      for (int y = 0; y < image.height; y++) for (int x = 0; x < image.width; x++) {
+        int rgba = image.getRGB(x, y)
+        data.writeBoolean((rgba >>> 24) == 255 && colors.contains(rgba & 0xffffff))
+      }
+    }
+  }
+}
+
+// The server reads exactly the same terrain metadata as the desktop renderer.
+processResources {
+  dependsOn tasks.named('generateTerrainMask')
+  from(terrainMaskDir)
+  from(rootProject.file('assets/maps-new')) {
+    include 'canyon.tmx', 'bog.tmx', 'lava.tmx', 'tileset.tsx'
+    into 'battlefields'
+  }
 }
 
 // Shared protocol and combat code must publish a normal dependency JAR.

@@ -6,6 +6,7 @@ public enum Action
     JOIN_REQUEST,
     JOIN,
     ROOM_READY,
+    START_TEST_MATCH,
     PRIVATE_JOIN_CONFIRMATION,
     PRIMARY,
     SECONDARY,
@@ -20,5 +21,8 @@ public enum Action
     MATCH_START,
     USE_ABILITY,
     MATCH_STATE,
+    REMATCH_VOTE,
+    REMATCH_UPDATE,
+    REMATCH_START,
     EOF
 }

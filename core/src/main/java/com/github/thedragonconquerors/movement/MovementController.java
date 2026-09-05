@@ -21,6 +21,8 @@ public class MovementController {
     private int waypointIndex  = 0;
     @Getter
     private boolean moving     = false;
+    @Getter
+    private boolean authoritativePath;
 
     @Getter
     private float remainingMovementDistance;
@@ -38,6 +40,7 @@ public class MovementController {
         this.path          = new ArrayList<>(newPath);
         this.waypointIndex = 0;
         this.moving        = true;
+        authoritativePath = false;
     }
 
     //returns new waypoint the player should walk
@@ -99,14 +102,14 @@ public class MovementController {
             stopMoving();
             return;
         }
-        remainingMovementDistance = Math.max(0f, remainingAfterMove)
-            + pathDistance(currentPos, newPath);
+        remainingMovementDistance = Math.max(0f, remainingAfterMove);
         setPath(newPath);
+        authoritativePath = true;
     }
 
     public void synchronizeRemainingDistance(float authoritativeRemaining)
     {
-        if (!moving) remainingMovementDistance = Math.max(0f, authoritativeRemaining);
+        remainingMovementDistance = Math.max(0f, authoritativeRemaining);
     }
 
     public void synchronizeMovement(float authoritativeMax, float authoritativeRemaining)
@@ -133,6 +136,10 @@ public class MovementController {
     {
         if (path.isEmpty()) return null;
         return path.get(path.size() - 1);
+    }
+
+    public List<Vector2> getRemainingPath() {
+        return moving ? path.subList(Math.min(waypointIndex, path.size()), path.size()) : List.of();
     }
 
 }

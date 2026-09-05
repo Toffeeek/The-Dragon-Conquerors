@@ -21,7 +21,17 @@ import com.shared.shared.model.world.BattlefieldZoneType;
 import java.util.*;
 
 public class NavGrid {
-    public static final float NODE_SIZE = 0.25f;
+    private com.shared.shared.model.world.BattlefieldNavigation sharedNavigation;
+    private List<Vector2> occupied = List.of();
+    private int revision;
+
+    public void setOccupied(List<Vector2> positions) {
+        List<Vector2> copy = new ArrayList<>();
+        for (Vector2 position : positions) copy.add(new Vector2(position));
+        if (!copy.equals(occupied)) { occupied = copy; revision++; }
+    }
+    public int getRevision() { return revision; }
+    public static final float NODE_SIZE = com.shared.shared.model.world.BattlefieldNavigation.NODE_SIZE;
 
     @Getter
     private final int cols;
@@ -42,6 +52,13 @@ public class NavGrid {
         this.cols = (int) Math.ceil(worldWidth / NODE_SIZE);
         this.rows = (int) Math.ceil(worldHeight / NODE_SIZE);
         this.walkable = new boolean[cols][rows];
+        if (battlefield != null) {
+            sharedNavigation = new com.shared.shared.model.world.BattlefieldNavigation(battlefield);
+            for (int c = 0; c < cols; c++) for (int r = 0; r < rows; r++) {
+                walkable[c][r] = battlefield.isWalkable(nodeToWorld(c, r));
+            }
+            return;
+        }
 
         // Start with everything walkable
         for (boolean[] col : walkable) {
@@ -291,6 +308,7 @@ public class NavGrid {
     }
 
     public List<Vector2> findPath(Vector2 startWorld, Vector2 goalWorld, float maxDistance) {
+        if (sharedNavigation != null) return sharedNavigation.findPath(startWorld, goalWorld, maxDistance, occupied);
         int[] startNode = worldToNode(startWorld);
         int[] goalNode = worldToNode(goalWorld);
 
@@ -364,6 +382,7 @@ public class NavGrid {
     }
 
     public List<Vector2> getReachablePositions(Vector2 startWorld, float maxDistance) {
+        if (sharedNavigation != null) return sharedNavigation.reachable(startWorld, maxDistance, occupied);
         int[] startNode = worldToNode(startWorld);
         List<Vector2> reachable = new ArrayList<>();
 

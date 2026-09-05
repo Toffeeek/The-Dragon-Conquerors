@@ -26,6 +26,7 @@ public class MatchState {
     private int roundNumber;
     private Environment environment;
     private boolean matchOver;
+    private boolean testingMode;
     private int winningTeam;
     private String message;
     @Builder.Default

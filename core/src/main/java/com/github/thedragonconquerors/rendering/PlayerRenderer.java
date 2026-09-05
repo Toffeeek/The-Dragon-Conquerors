@@ -50,6 +50,8 @@ public class PlayerRenderer implements Disposable {
 
     private List<Vector2> cachedReachable;
     private float lastRemainingDistance = -1f;
+    private final Vector2 lastReachablePosition = new Vector2(Float.NaN, Float.NaN);
+    private int lastGridRevision = -1;
     private float pulseTime = 0f;
 
     public PlayerRenderer(AssetService assetService, Batch spriteBatch) {
@@ -63,16 +65,20 @@ public class PlayerRenderer implements Disposable {
         pulseTime += delta;
 
         float remaining = player.getMovementController().getRemainingMovementDistance();
-        if (player.isActiveTurn() && navGrid != null
-            && Math.abs(remaining - lastRemainingDistance) > 0.0001f) {
+        if (player.isActiveTurn() && navGrid != null && !player.getMovementController().isMoving()
+            && (Math.abs(remaining - lastRemainingDistance) > 0.0001f
+                || !player.getPosition().epsilonEquals(lastReachablePosition, 0.001f)
+                || lastGridRevision != navGrid.getRevision())) {
             cachedReachable = navGrid.getReachablePositions(player.getPosition(), remaining);
             lastRemainingDistance = remaining;
+            lastReachablePosition.set(player.getPosition());
+            lastGridRevision = navGrid.getRevision();
         } else if (!player.isActiveTurn()) {
             cachedReachable = null;
             lastRemainingDistance = -1f;
         }
 
-        if (player.isActiveTurn()) drawReachable(projection);
+        if (player.isActiveTurn() && !player.getMovementController().isMoving()) drawReachable(projection);
         drawCharacter(player, projection);
         drawPath(player, projection);
         drawBars(player, projection, true);
@@ -98,13 +104,17 @@ public class PlayerRenderer implements Disposable {
 
     private void drawReachable(Matrix4 projection) {
         if (cachedReachable == null) return;
+        com.badlogic.gdx.Gdx.gl.glEnable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+        com.badlogic.gdx.Gdx.gl.glBlendFunc(com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA, com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
         shapeRenderer.setProjectionMatrix(projection);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(COLOR_REACHABLE);
         for (Vector2 pos : cachedReachable) {
-            shapeRenderer.circle(pos.x, pos.y, NavGrid.NODE_SIZE * 0.35f, 6);
+            shapeRenderer.rect(pos.x - NavGrid.NODE_SIZE / 2f, pos.y - NavGrid.NODE_SIZE / 2f,
+                NavGrid.NODE_SIZE, NavGrid.NODE_SIZE);
         }
         shapeRenderer.end();
+        com.badlogic.gdx.Gdx.gl.glDisable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
     }
 
     private void drawCharacter(Player player, Matrix4 projection) {
@@ -165,8 +175,8 @@ public class PlayerRenderer implements Disposable {
     }
 
     private void drawPath(Player player, Matrix4 projection) {
-        List<Vector2> path = player.getMovementController().getPath();
-        if (path == null || path.size() <= 1) return;
+        List<Vector2> path = player.getMovementController().getRemainingPath();
+        if (path == null || path.isEmpty()) return;
 
         shapeRenderer.setProjectionMatrix(projection);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);

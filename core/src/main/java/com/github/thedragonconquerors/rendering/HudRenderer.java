@@ -17,6 +17,9 @@ import com.shared.shared.model.world.Environment;
 import java.util.List;
 
 public class HudRenderer implements Disposable {
+    public static final float VIRTUAL_WIDTH = 1280f;
+    public static final float BOTTOM_HEIGHT = 112f;
+    public static final float TOP_HEIGHT = 58f;
 
     private final SpriteBatch   hudBatch;
     private final ShapeRenderer shapeRenderer;
@@ -50,7 +53,7 @@ public class HudRenderer implements Disposable {
 
     // ── action bar layout (bottom-centre) ─────────────────────────
     private static final float SLOT_W  = 110f;
-    private static final float SLOT_H  = 48f;
+    private static final float SLOT_H  = 78f;
     private static final float SLOT_GAP = 6f;
     private static final float SLOT_Y  = 10f;   // distance from bottom of screen
 
@@ -82,12 +85,13 @@ public class HudRenderer implements Disposable {
 
     /** Call this after an action executes to show a result message on screen. */
     public void showFeedback(ActionResult result) {
-        this.feedbackMessage = result.message;
-        this.feedbackTimer   = FEEDBACK_DURATION;
+        showFeedback(result.message);
     }
 
     public void showFeedback(String message) {
-        this.feedbackMessage = message;
+        // The built-in bitmap font has no Unicode arrows/dashes; avoid missing-glyph squares.
+        this.feedbackMessage = message == null ? "" : message.replace("\u2192", "->")
+            .replace('\u2014', '-').replace('\u2013', '-');
         this.feedbackTimer   = FEEDBACK_DURATION;
     }
 
@@ -97,7 +101,7 @@ public class HudRenderer implements Disposable {
 
     public void showTargetingPrompt(AbilityType action) {
         this.targetingPrompt = "Select a target for " + action.getDisplayName()
-            + " — green is in range, red is out of range  [ESC to cancel]";
+            + " - green: in range, red: out of range  [ESC to cancel]";
     }
 
     public void clearTargetingPrompt() {
@@ -110,7 +114,7 @@ public class HudRenderer implements Disposable {
 
     public void setEnvironment(Environment environment) {
         this.environmentName = environment == null ? "" : environment.getDisplayName();
-        this.environmentRule = environment == null ? "" : environment.hazardSummary();
+        this.environmentRule = environment == null ? "" : environment.hazardSummary().replace('\u2014', '-');
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -120,10 +124,10 @@ public class HudRenderer implements Disposable {
     public void render(Player player, float delta) {
         feedbackTimer = Math.max(0f, feedbackTimer - delta);
 
-        Matrix4 screenMatrix = new Matrix4().setToOrtho2D(
-            0, 0, viewport.getScreenWidth(), viewport.getScreenHeight());
-        int sw = viewport.getScreenWidth();
-        int sh = viewport.getScreenHeight();
+        int sw = (int)VIRTUAL_WIDTH;
+        int sh = Math.round(VIRTUAL_WIDTH * com.badlogic.gdx.Gdx.graphics.getHeight() / com.badlogic.gdx.Gdx.graphics.getWidth());
+        com.badlogic.gdx.Gdx.gl.glViewport(0, 0, com.badlogic.gdx.Gdx.graphics.getWidth(), com.badlogic.gdx.Gdx.graphics.getHeight());
+        Matrix4 screenMatrix = new Matrix4().setToOrtho2D(0, 0, sw, sh);
 
         StatComponent stats         = player.getStats();
         float maxMovement           = player.getMovementController().getMaxMovementDistance();
@@ -132,7 +136,7 @@ public class HudRenderer implements Disposable {
 
         float hpRatio               = (float) stats.getHp()   / stats.getMaxHp();
         float manaRatio             = (float) stats.getMana()  / stats.getMaxMana();
-        float staminaRatio          = remainingMovement / maxMovement;
+        float staminaRatio          = maxMovement <= 0f ? 0f : remainingMovement / maxMovement;
 
         // total action bar width, centred on screen
         float totalBarW = actions.size() * SLOT_W + (actions.size() - 1) * SLOT_GAP;
@@ -140,6 +144,9 @@ public class HudRenderer implements Disposable {
 
         shapeRenderer.setProjectionMatrix(screenMatrix);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        shapeRenderer.setColor(0.045f, 0.06f, 0.08f, 1f);
+        shapeRenderer.rect(0, 0, sw, BOTTOM_HEIGHT);
+        shapeRenderer.rect(0, sh - TOP_HEIGHT, sw, TOP_HEIGHT);
 
         // ── stat bars ─────────────────────────────────────────────
         drawBar(HP_Y,      hpRatio,      hpRatio < 0.3f ? HP_LOW : HP_FILL);
@@ -181,23 +188,27 @@ public class HudRenderer implements Disposable {
         // stat bar labels
         font.draw(hudBatch,
             "HP:      " + stats.getHp() + " / " + stats.getMaxHp(),
-            BAR_X, HP_Y + LABEL_OFFSET);
+            BAR_X, HP_Y + BAR_H - 1f);
         font.draw(hudBatch,
             "Mana:  "  + stats.getMana() + " / " + stats.getMaxMana(),
-            BAR_X, MANA_Y + LABEL_OFFSET);
+            BAR_X, MANA_Y + BAR_H - 1f);
         font.draw(hudBatch,
-            "Stamina: " + String.format("%.2f", remainingMovement) + "/" + String.format("%.2f", maxMovement),
-            BAR_X, 60);
+            "Movement: " + String.format("%.2f", remainingMovement) + " / " + String.format("%.2f", maxMovement),
+            BAR_X, STAMINA_Y + BAR_H - 1f);
+        font.setColor(ACTION_SELECTED);
+        font.draw(hudBatch, "Action points: " + player.getActionPoints() + " / 1", BAR_X, 22f);
+        font.setColor(TEXT_COLOR);
 
         // end turn hint (top-right)
-        font.draw(hudBatch, "[E] End Turn", sw - 120f, 24f);
+        font.draw(hudBatch, "[E] End Turn", sw - 180f, 42f);
+        font.draw(hudBatch, "1-4: Ability | Click: Move", sw - 200f, 22f);
 
         if (!joinUrl.isEmpty()) {
             font.draw(hudBatch, "Join: " + joinUrl, 16f, sh - 14f);
         }
         if (!environmentName.isEmpty()) {
             font.draw(hudBatch, "Battlefield: " + environmentName, sw - 180f, sh - 14f);
-            font.draw(hudBatch, environmentRule, sw - 300f, sh - 32f);
+            font.draw(hudBatch, environmentRule, sw - 340f, sh - 32f);
         }
 
         // action slot labels
@@ -217,7 +228,7 @@ public class HudRenderer implements Disposable {
                 int mid = name.lastIndexOf(' ', 13);
                 if (mid < 0) mid = 13;
                 font.draw(hudBatch, name.substring(0, mid),  sx + 4f, SLOT_Y + SLOT_H - 18f);
-                font.draw(hudBatch, name.substring(mid + 1), sx + 4f, SLOT_Y + SLOT_H - 30f);
+                font.draw(hudBatch, name.substring(mid + 1), sx + 4f, SLOT_Y + SLOT_H - 34f);
             } else {
                 font.draw(hudBatch, name, sx + 4f, SLOT_Y + SLOT_H - 18f);
             }
@@ -226,26 +237,26 @@ public class HudRenderer implements Disposable {
             font.setColor(MANA_FILL);
             int cooldown = player.cooldownTurns(action);
             String cost = cooldown > 0 ? "CD " + cooldown
-                : action.getManaCost() > 0 ? action.getManaCost() + " MP" : "Free";
+                : "1 AP" + (action.getManaCost() > 0 ? " + " + action.getManaCost() + " Mana" : "");
             font.draw(hudBatch, cost, sx + 4f, SLOT_Y + 14f);
         }
 
         font.setColor(player.isActiveTurn() ? ACTION_SELECTED : TEXT_COLOR);
         font.draw(hudBatch, player.isActiveTurn() ? "YOUR TURN" : "WAITING FOR TURN",
-            sw - 165f, 46f);
+            sw - 180f, 70f);
 
         // target-selection prompt remains visible until a player is clicked or ESC is pressed
         if (!targetingPrompt.isEmpty()) {
             font.setColor(ACTION_SELECTED);
             font.draw(hudBatch, targetingPrompt,
-                Math.max(20f, (sw - targetingPrompt.length() * 7f) / 2f), sh - 28f);
+                Math.max(20f, (sw - targetingPrompt.length() * 7f) / 2f), BOTTOM_HEIGHT + 20f);
         }
 
         // feedback message (fades out)
         if (feedbackTimer > 0f) {
             font.setColor(FEEDBACK_COLOR.r, FEEDBACK_COLOR.g, FEEDBACK_COLOR.b,
                 Math.min(1f, feedbackTimer));
-            float feedbackY = targetingPrompt.isEmpty() ? sh - 30f : sh - 52f;
+            float feedbackY = BOTTOM_HEIGHT - 5f;
             font.draw(hudBatch, feedbackMessage,
                 Math.max(20f, (sw - feedbackMessage.length() * 7f) / 2f), feedbackY);
         }

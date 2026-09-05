@@ -50,17 +50,17 @@ class EnvironmentRulesTest {
     @Test
     void serverRejectsMovementAcrossACanyonGap() {
         AuthoritativeMatch match = match(Environment.CANYON, defaultPlayers(), resolver());
-        CombatCommandResult result = match.move(0, new Vector2(14f, 12f));
+        CombatCommandResult result = match.move(0, new Vector2(22.5f, 9.5f));
         assertFalse(result.isAccepted());
-        assertTrue(result.getError().contains("wall or cliff"));
+        assertTrue(result.getError().contains("unsafe"));
     }
 
     @Test
     void eldritchBlastCanPushATargetIntoTheCanyon() {
         List<LobbyPlayer> players = List.of(
-            player(0, CharacterClass.MAGE, Race.ELF, 1, 7.5f, 8f),
+            player(0, CharacterClass.MAGE, Race.ELF, 1, 7.5f, 4.5f),
             player(1, CharacterClass.PALADIN, Race.HUMAN, 1, 4f, 12f),
-            player(2, CharacterClass.PALADIN, Race.DRAGONBORNE, 2, 8.5f, 8f),
+            player(2, CharacterClass.PALADIN, Race.DRAGONBORNE, 2, 8.5f, 4.5f),
             player(3, CharacterClass.ARCHER, Race.HUMAN, 2, 25f, 12f));
         AuthoritativeMatch match = match(Environment.CANYON, players, resolver());
 
