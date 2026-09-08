@@ -1,10 +1,13 @@
+// File Location: client/src/main/java/com/client/client/NetworkClient.java
 package com.client.client;
 
 import com.badlogic.gdx.math.Vector2;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
-import com.shared.shared.model.PlayerState;
+import com.shared.shared.model.Race;
+import com.shared.shared.model.world.Environment;
+import com.shared.shared.model.ability.AbilityType;
 import lombok.Setter;
 import org.springframework.messaging.converter.JacksonJsonMessageConverter;
 import org.springframework.messaging.simp.stomp.StompFrameHandler;
@@ -22,6 +25,8 @@ public class NetworkClient
     String url;
     private WebSocketStompClient stompClient;
     private StompSession session;
+    private StompSession.Subscription roomSubscription;
+    private String roomId;
 
     @Setter
     private Consumer<Packet> packetHandler;
@@ -53,22 +58,6 @@ public class NetworkClient
             }
         ).get();
 
-        session.subscribe("/match/public", new StompFrameHandler() {
-            @Override
-            public Type getPayloadType(StompHeaders headers)
-            {
-                return Packet.class;
-            }
-
-            @Override
-            public void handleFrame(StompHeaders headers, Object payload)
-            {
-                Packet p = (Packet) payload;
-                System.out.println("[SERVER] Received public packet: " + "PlayerID " + p.getPlayer().getID() + ":" + p.getAction() + ":" + p.getPlayer().getPosition());
-                handlePacket(p);
-            }
-        });
-
         session.subscribe("/user/queue/private", new StompFrameHandler()
         {
             @Override
@@ -82,7 +71,36 @@ public class NetworkClient
             {
                 Packet p = (Packet) payload;
                 System.out.println("Received private packet: " + p.getAction());
+                if (p.getAction() == Action.PRIVATE_JOIN_CONFIRMATION
+                    && p.getRoomId() != null && !p.getRoomId().isBlank()) {
+                    subscribeToRoom(p.getRoomId());
+                    handlePacket(p);
+                    session.send("/app/game.roomReady", Packet.builder()
+                        .ID(p.getID()).roomId(p.getRoomId()).action(Action.ROOM_READY).build());
+                    return;
+                }
                 handlePacket(p);
+            }
+        });
+    }
+
+    private synchronized void subscribeToRoom(String assignedRoomId) {
+        if (assignedRoomId.equals(roomId) && roomSubscription != null) return;
+        if (roomSubscription != null) roomSubscription.unsubscribe();
+        roomId = assignedRoomId;
+        roomSubscription = session.subscribe("/match/rooms/" + roomId, new StompFrameHandler() {
+            @Override
+            public Type getPayloadType(StompHeaders headers) {
+                return Packet.class;
+            }
+
+            @Override
+            public void handleFrame(StompHeaders headers, Object payload) {
+                Packet packet = (Packet) payload;
+                if (!assignedRoomId.equals(packet.getRoomId())) return;
+                System.out.println("Received " + assignedRoomId + " packet: PlayerID "
+                    + packet.getID() + ":" + packet.getAction());
+                handlePacket(packet);
             }
         });
     }
@@ -99,26 +117,100 @@ public class NetworkClient
     {
         if (session != null && session.isConnected())
         {
+            packet.setRoomId(roomId);
             session.send("/app/game.takeAction", packet);
         }
     }
 
-    public void join(PlayerState playerState)
+    public void join(String username, Vector2 startingPosition, CharacterClass characterClass)
+    {
+        join(username, startingPosition, 0, characterClass, Race.HUMAN);
+    }
+
+    public void join(String username, Vector2 startingPosition, int teamIndex,
+                     CharacterClass characterClass, Race race)
     {
         if (session != null && session.isConnected())
         {
+            roomId = null;
             Packet joinPacket = Packet.builder()
-                .player(playerState)
+                .username(username)
+                .finalPosition(startingPosition)
+                .teamIndex(teamIndex)
+                .characterClass(characterClass)
+                .race(race)
                 .action(Action.JOIN)
                 .build();
             session.send("/app/game.joinGame", joinPacket);
         }
     }
 
+    public void voteEnvironment(int playerId, Environment environment)
+    {
+        if (session != null && session.isConnected() && playerId >= 0 && environment != null)
+        {
+            Packet votePacket = Packet.builder()
+                .ID(playerId)
+                .roomId(roomId)
+                .environment(environment)
+                .action(Action.ENVIRONMENT_VOTE)
+                .build();
+            session.send("/app/game.voteEnvironment", votePacket);
+        }
+    }
+
+    public void move(int playerId, Vector2 destination)
+    {
+        send(Packet.builder()
+            .ID(playerId)
+            .finalPosition(destination == null ? null : new Vector2(destination))
+            .action(Action.MOVE)
+            .build());
+    }
+
+    public void startTestMatch(int playerId) {
+        if (session != null && session.isConnected() && playerId >= 0) {
+            session.send("/app/game.startTestMatch", Packet.builder()
+                .ID(playerId).roomId(roomId).action(Action.START_TEST_MATCH).build());
+        }
+    }
+
+    public void useAbility(int playerId, AbilityType ability, int targetPlayerId,
+                           Vector2 targetPosition)
+    {
+        send(Packet.builder()
+            .ID(playerId)
+            .ability(ability)
+            .targetPlayerID(targetPlayerId)
+            .targetPosition(targetPosition == null ? null : new Vector2(targetPosition))
+            .action(Action.USE_ABILITY)
+            .build());
+    }
+
+    public void endTurn(int playerId)
+    {
+        send(Packet.builder().ID(playerId).action(Action.END_TURN).build());
+    }
+
+    public void requestRematch(int playerId)
+    {
+        if (session != null && session.isConnected() && playerId >= 0)
+        {
+            session.send("/app/game.voteRematch", Packet.builder()
+                .ID(playerId)
+                .roomId(roomId)
+                .action(Action.REMATCH_VOTE)
+                .build());
+        }
+    }
+
     public void disconnect() {
         if (session != null && session.isConnected())
         {
+            if (roomSubscription != null) roomSubscription.unsubscribe();
             session.disconnect();
         }
+        roomSubscription = null;
+        roomId = null;
     }
 }

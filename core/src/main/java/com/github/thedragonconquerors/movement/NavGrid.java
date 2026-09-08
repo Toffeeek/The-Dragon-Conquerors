@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/movement/NavGrid.java
 package com.github.thedragonconquerors.movement;
 
 import com.badlogic.gdx.maps.MapLayer;
@@ -13,11 +14,24 @@ import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import lombok.Getter;
+import com.shared.shared.model.world.BattlefieldDefinition;
+import com.shared.shared.model.world.BattlefieldZone;
+import com.shared.shared.model.world.BattlefieldZoneType;
 
 import java.util.*;
 
 public class NavGrid {
-    public static final float NODE_SIZE = 0.25f;
+    private com.shared.shared.model.world.BattlefieldNavigation sharedNavigation;
+    private List<Vector2> occupied = List.of();
+    private int revision;
+
+    public void setOccupied(List<Vector2> positions) {
+        List<Vector2> copy = new ArrayList<>();
+        for (Vector2 position : positions) copy.add(new Vector2(position));
+        if (!copy.equals(occupied)) { occupied = copy; revision++; }
+    }
+    public int getRevision() { return revision; }
+    public static final float NODE_SIZE = com.shared.shared.model.world.BattlefieldNavigation.NODE_SIZE;
 
     @Getter
     private final int cols;
@@ -28,11 +42,23 @@ public class NavGrid {
     private final float worldHeight;
 
     public NavGrid(TiledMap map, float unitScale, float worldWidth, float worldHeight) {
+        this(map, unitScale, worldWidth, worldHeight, null);
+    }
+
+    public NavGrid(TiledMap map, float unitScale, float worldWidth, float worldHeight,
+                   BattlefieldDefinition battlefield) {
         this.worldWidth = worldWidth;
         this.worldHeight = worldHeight;
         this.cols = (int) Math.ceil(worldWidth / NODE_SIZE);
         this.rows = (int) Math.ceil(worldHeight / NODE_SIZE);
         this.walkable = new boolean[cols][rows];
+        if (battlefield != null) {
+            sharedNavigation = new com.shared.shared.model.world.BattlefieldNavigation(battlefield);
+            for (int c = 0; c < cols; c++) for (int r = 0; r < rows; r++) {
+                walkable[c][r] = battlefield.isWalkable(nodeToWorld(c, r));
+            }
+            return;
+        }
 
         // Start with everything walkable
         for (boolean[] col : walkable) {
@@ -51,12 +77,23 @@ public class NavGrid {
         List<Rectangle> cliffEdgeRects = buildObjectLayerRectangles(map, "CliffEdges", unitScale);
         markBlockedRectangles(cliffEdgeRects);
 
+        List<Rectangle> authoritativeZones = new ArrayList<>();
+        if (battlefield != null) {
+            for (BattlefieldZone zone : battlefield.getZones()) {
+                if (zone.getType() == BattlefieldZoneType.HAZARD) continue;
+                authoritativeZones.add(new Rectangle(zone.getX(), zone.getY(),
+                    zone.getWidth(), zone.getHeight()));
+            }
+            markBlockedRectangles(authoritativeZones);
+        }
+
         System.out.println(
             "NavGrid: " + cols + "x" + rows +
                 " nodes, unitScale=" + unitScale +
                 ", blockedPolygons=" + blockedPolygons.size() +
                 ", dropZoneRects=" + dropZoneRects.size() +
                 ", cliffEdgeRects=" + cliffEdgeRects.size()
+                + ", authoritativeZones=" + authoritativeZones.size()
         );
     }
 
@@ -271,6 +308,7 @@ public class NavGrid {
     }
 
     public List<Vector2> findPath(Vector2 startWorld, Vector2 goalWorld, float maxDistance) {
+        if (sharedNavigation != null) return sharedNavigation.findPath(startWorld, goalWorld, maxDistance, occupied);
         int[] startNode = worldToNode(startWorld);
         int[] goalNode = worldToNode(goalWorld);
 
@@ -344,6 +382,7 @@ public class NavGrid {
     }
 
     public List<Vector2> getReachablePositions(Vector2 startWorld, float maxDistance) {
+        if (sharedNavigation != null) return sharedNavigation.reachable(startWorld, maxDistance, occupied);
         int[] startNode = worldToNode(startWorld);
         List<Vector2> reachable = new ArrayList<>();
 

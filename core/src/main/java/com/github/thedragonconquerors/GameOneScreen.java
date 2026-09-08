@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/GameOneScreen.java
 package com.github.thedragonconquerors;
 
 import com.badlogic.gdx.Gdx;
@@ -14,84 +15,114 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
 import com.github.thedragonconquerors.assets.SpriteAssets;
-import com.github.thedragonconquerors.combat.ActionAnimation;
-import com.github.thedragonconquerors.combat.ActionResult;
-import com.github.thedragonconquerors.combat.ActionSystem;
-import com.github.thedragonconquerors.combat.ActionType;
 import com.github.thedragonconquerors.entities.Player;
-import com.github.thedragonconquerors.entities.PlayerConverter;
 import com.github.thedragonconquerors.input.MouseInputHandler;
 import com.github.thedragonconquerors.movement.MovementSystem;
 import com.github.thedragonconquerors.movement.NavGrid;
 import com.github.thedragonconquerors.rendering.HudRenderer;
 import com.github.thedragonconquerors.rendering.PlayerRenderer;
+import com.github.thedragonconquerors.rendering.BattlefieldOverlayRenderer;
 import com.shared.shared.model.Action;
+import com.shared.shared.model.CharacterBuild;
 import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
-import com.shared.shared.model.TEAM;
-import com.shared.shared.model.PlayerState;
+import com.shared.shared.model.Race;
+import com.shared.shared.model.ability.AbilityType;
+import com.shared.shared.model.ability.TargetType;
+import com.shared.shared.model.world.Environment;
+import com.shared.shared.model.world.BattlefieldDefinition;
+import com.shared.shared.network.MatchState;
+import com.shared.shared.network.PlayerCombatState;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import static com.github.thedragonconquerors.assets.MapAssets.MAIN;
-
 public class GameOneScreen extends ScreenAdapter {
+
+    /**
+     * Class assumed for a remote player whose join packet carried no class.
+     *
+     * <p>Should not happen — the lobby always sends one — but a null class would
+     * NPE inside {@link Player}'s stat setup, so a mid-match join is rendered as
+     * a Paladin instead of dropping the player. If this ever fires it means the
+     * join packet lost its class in transit, which is worth investigating.</p>
+     */
+    private static final CharacterClass DEFAULT_REMOTE_CLASS = CharacterClass.PALADIN;
+
     private final Main game;
     private final Batch batch;
     private final AssetService assetService;
     private final Viewport viewport;
     private final OrthographicCamera camera;
     private final NetworkClient networkClient;
+    private final int teamIndex;
+    private final CharacterBuild chosenBuild;
+    private final Environment environment;
+    private final List<Packet> initialRoster;
+    private final MatchState initialMatchState;
+    private final BattlefieldDefinition battlefield;
 
     private OrthogonalTiledMapRenderer mapRenderer;
+    private BattlefieldOverlayRenderer battlefieldOverlay;
     private MovementSystem movementSystem;
     private NavGrid navGrid;
-
-    private final Vector2 GAMEONE_BLUE_SPAWN = new Vector2(1f, 9f);
-    private final Vector2 GAMEONE_RED_SPAWN = new Vector2(28f, 9f);
-
     private Player localPlayer;
-    private int activePlayerId = -1;
     private final ArrayList<Player> enemyPlayers = new ArrayList<>();
     private final Map<Integer, Player> playersById = new HashMap<>();
-
+    private int localPlayerId;
     private boolean receivingInitialPlayerList = false;
+    private boolean postMatchShown;
 
     private PlayerRenderer playerRenderer;
     private MouseInputHandler mouseInputHandler;
     private HudRenderer hudRenderer;
-    private ActionSystem actionSystem;
-    private ActionType[] availableActions;
+    private List<AbilityType> availableActions;
     private int selectedActionIndex = 0;
-    private ActionType pendingTargetAction;
+    private AbilityType pendingTargetAction;
 
-    public GameOneScreen(Main game, TEAM team, CharacterClass chosenClass)
-    {
+    public GameOneScreen(Main game, int teamIndex, CharacterBuild chosenBuild,
+                         Environment environment, int localPlayerId,
+                         List<Packet> initialRoster, MatchState initialMatchState) {
         this.networkClient = game.getNetworkClient();
+        this.teamIndex = teamIndex;
+        this.chosenBuild = chosenBuild;
+        this.environment = environment;
+        this.localPlayerId = localPlayerId;
+        this.initialRoster = initialRoster == null
+            ? new ArrayList<>() : new ArrayList<>(initialRoster);
+        this.initialMatchState = initialMatchState;
+        this.battlefield = BattlefieldDefinition.forEnvironment(environment);
         this.game = game;
         this.assetService = game.getAssetService();
         this.viewport = game.getViewport();
         this.camera = game.getCamera();
         this.batch = game.getBatch();
-        this.networkClient.setPacketHandler(packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
-        this.availableActions = ActionType.availableFor(chosenClass);
-
-        Vector2 startingPosition = team == TEAM.BLUE ? GAMEONE_BLUE_SPAWN : GAMEONE_RED_SPAWN;
-        createLocalPlayer(team, startingPosition, chosenClass);
+        this.networkClient.setPacketHandler(
+            packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
     }
 
     @Override
     public void show() {
         movementSystem = new MovementSystem();
-        actionSystem = new ActionSystem();
 
+        Packet localPacket = findInitialPlayer(localPlayerId);
+        float spawnX = teamIndex == 1 ? 1f : 28f;
+        Vector2 spawn = localPacket != null && localPacket.getFinalPosition() != null
+            ? new Vector2(localPacket.getFinalPosition()) : new Vector2(spawnX, 9f);
+        String username = localPacket != null && localPacket.getUsername() != null
+            ? localPacket.getUsername() : "Player";
+        spawnLocalPlayer(username, spawn, chosenBuild);
+        availableActions = AbilityType.forClass(chosenBuild.getCharacterClass());
 
-        TiledMap map = assetService.load(MAIN);
+        TiledMap map = assetService.load(
+            com.github.thedragonconquerors.assets.MapAssets.forEnvironment(environment));
         mapRenderer = new OrthogonalTiledMapRenderer(map, Main.UNIT_SCALE, batch);
-        navGrid = new NavGrid(map, Main.UNIT_SCALE, Main.WORLD_WIDTH, Main.WORLD_HEIGHT);
+        navGrid = new NavGrid(map, Main.UNIT_SCALE, Main.WORLD_WIDTH, Main.WORLD_HEIGHT,
+            battlefield);
         movementSystem.setNavGrid(navGrid);
+        battlefieldOverlay = new BattlefieldOverlayRenderer(battlefield);
 
         for (SpriteAssets sprite : SpriteAssets.values()) {
             try {
@@ -102,35 +133,45 @@ public class GameOneScreen extends ScreenAdapter {
             }
         }
 
-        playerRenderer = new PlayerRenderer(assetService, batch, this::localPlayerIsActive);
+        playerRenderer = new PlayerRenderer(assetService, batch);
         hudRenderer = new HudRenderer(viewport);
         hudRenderer.setJoinUrl(game.getHostedJoinUrl());
+        hudRenderer.setEnvironment(environment);
         mouseInputHandler = new MouseInputHandler(
             camera, viewport, localPlayer, movementSystem,
-            this::handleWorldClick, this::sendLocalMove, this::localPlayerIsActive);
+            this::handleWorldClick, this::sendLocalMove);
         Gdx.input.setInputProcessor(mouseInputHandler);
-    }
-    private void createLocalPlayer(TEAM team, Vector2 startingPosition, CharacterClass chosenClass)
-    {
-        this.localPlayer = new Player(-1, "default-username", team, startingPosition, chosenClass);
-        receivingInitialPlayerList = true;
-        networkClient.join(PlayerConverter.toPlayerState(localPlayer));
+
+        for (Packet packet : initialRoster) {
+            if (packet.getID() != localPlayerId) receiveExistingPlayer(packet);
+        }
+        receivingInitialPlayerList = false;
+        applyMatchState(initialMatchState);
     }
 
-    private boolean localPlayerIsActive()
-    {
-        return activePlayerId == localPlayer.getID();
+    private void spawnLocalPlayer(String username, Vector2 startingPosition,
+                                  CharacterBuild build) {
+        localPlayer = new Player(localPlayerId, username, startingPosition, build, teamIndex);
+    }
+
+    private Packet findInitialPlayer(int playerId) {
+        for (Packet packet : initialRoster) {
+            if (packet.getID() == playerId) return packet;
+        }
+        return null;
     }
 
     @Override
     public void render(float delta) {
+        if (initialMatchState != null && initialMatchState.isTestingMode()
+            && pendingTargetAction == null && Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            game.returnToMenu();
+            return;
+        }
         movementSystem.update(localPlayer, delta);
         for (Player enemy : enemyPlayers) movementSystem.update(enemy, delta);
 
-        if (Gdx.input.isKeyJustPressed(Input.Keys.E) && localPlayerIsActive())
-        {
-            endTurn();
-        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.E)) endTurn();
         handleActionKeys();
 
         ScreenUtils.clear(Color.BLACK);
@@ -138,12 +179,13 @@ public class GameOneScreen extends ScreenAdapter {
         batch.setColor(Color.WHITE);
         mapRenderer.setView(camera);
         mapRenderer.render();
+        battlefieldOverlay.render(camera.combined);
 
         playerRenderer.renderLocal(localPlayer, camera.combined, navGrid, delta);
         for (Player enemy : enemyPlayers) {
-            boolean selecting = pendingTargetAction != null && enemy.getStats().getHp() > 0;
+            boolean selecting = pendingTargetAction != null && isLegalTarget(enemy, pendingTargetAction);
             boolean inRange = selecting && localPlayer.getPosition().dst(enemy.getPosition())
-                <= pendingTargetAction.range;
+                <= pendingTargetAction.getRange();
             playerRenderer.renderEnemy(enemy, camera.combined, delta, selecting, inRange);
         }
 
@@ -153,9 +195,8 @@ public class GameOneScreen extends ScreenAdapter {
     private void handlePacket(Packet packet) {
         switch (packet.getAction()) {
             case PRIVATE_JOIN_CONFIRMATION:
-                localPlayer.setID(packet.getPlayer().getID());
-                this.activePlayerId = packet.getActivePlayerID();
-                System.out.println("My player ID is " + localPlayer.getID() + " Current Active Player: " + activePlayerId);
+                localPlayerId = packet.getID();
+                System.out.println("My player ID is " + localPlayerId);
                 break;
             case PLAYER_COORDINATE:
                 receiveExistingPlayer(packet);
@@ -169,175 +210,88 @@ public class GameOneScreen extends ScreenAdapter {
                 receiveJoin(packet);
                 break;
             case MOVE:
-                if (packet.getPlayer().getID() != localPlayer.getID()) moveEnemyPlayer(packet);
-                break;
-            case PRIMARY:
-            case SECONDARY:
-            case TERTIARY:
-            case ULTIMATE:
-                processAttack(packet);
-                break;
-            case END_TURN:
-                System.out.println(activePlayerId + " has ended their turn");
-                this.activePlayerId = packet.getActivePlayerID();
-                System.out.println(activePlayerId + " is the new active player");
+                if (packet.getID() != localPlayerId) moveEnemyPlayer(packet);
                 break;
             case LEAVE:
-                this.activePlayerId = packet.getActivePlayerID();
-                removeEnemyPlayer(packet.getPlayer().getID());
+                removeEnemyPlayer(packet.getID());
+                break;
+            case MATCH_STATE:
+                applyMatchState(packet.getMatchState());
+                break;
+            case ERROR:
+                if (hudRenderer != null) {
+                    hudRenderer.showFeedback(packet.getMessage() == null
+                        ? "The server rejected that command." : packet.getMessage());
+                }
                 break;
             default:
                 break;
         }
-    }
-
-    private void processAttack(Packet p)
-    {
-        if (p.getPlayer().getID() == localPlayer.getID())
-            return;
-
-        var affectedPlayersId = p.getAffectedPlayersId();
-        if (affectedPlayersId == null || affectedPlayersId.isEmpty())
-            return;
-
-        Player dealer = playerById(p.getPlayer().getID());
-        Player firstAffectedPlayer = null;
-        for (Integer affectedPlayerId : affectedPlayersId) {
-            firstAffectedPlayer = playerById(affectedPlayerId);
-            if (firstAffectedPlayer != null) break;
-        }
-
-        ActionType action = actionTypeFromPacket(p);
-        if (dealer != null && firstAffectedPlayer != null) {
-            dealer.getAnimationController().playAttack(
-                dealer.getPosition(), firstAffectedPlayer.getPosition(),
-                action.animation == ActionAnimation.CAST);
-        }
-
-        var deltaHealth = p.getDeltaHealth();
-        var killedPlayersId = p.getKilledPlayersId();
-
-        for (Integer affectedPlayerId : affectedPlayersId) {
-            Player affectedPlayer = playerById(affectedPlayerId);
-            if (affectedPlayer == null) continue;
-
-            if (deltaHealth < 0) {
-                affectedPlayer.getStats().applyDamage(-deltaHealth);
-            } else if (deltaHealth > 0) {
-                affectedPlayer.getStats().heal(deltaHealth);
-            }
-
-            boolean killed = killedPlayersId != null && killedPlayersId.contains(affectedPlayerId);
-            if (killed || affectedPlayer.getStats().getHp() <= 0) {
-                affectedPlayer.getStats().setHp(0);
-                affectedPlayer.getAnimationController().playDeath();
-            } else if (deltaHealth < 0 && dealer != null) {
-                affectedPlayer.getAnimationController().playHurt(
-                    dealer.getPosition(), affectedPlayer.getPosition());
-            }
-        }
-    }
-
-    private Player playerById(int playerId) {
-        if (playerId == localPlayer.getID()) return localPlayer;
-        return playersById.get(playerId);
-    }
-
-    private ActionType actionTypeFromPacket(Packet packet) {
-        CharacterClass characterClass = packet.getPlayer().getCharacterClass() == null
-            ? CharacterClass.WARRIOR : packet.getPlayer().getCharacterClass();
-        ActionType[] actions = ActionType.availableFor(characterClass);
-        int actionIndex;
-
-        switch (packet.getAction()) {
-            case SECONDARY:
-                actionIndex = 1;
-                break;
-            case TERTIARY:
-                actionIndex = 2;
-                break;
-            case ULTIMATE:
-                actionIndex = 3;
-                break;
-            case PRIMARY:
-            default:
-                actionIndex = 0;
-                break;
-        }
-
-        if (actionIndex >= actions.length) return actions[0];
-        return actions[actionIndex];
     }
 
     private void receiveJoin(Packet packet) {
-        if (packet.getPlayer() == null) return;
-
         if (isPendingLocalJoin(packet)) {
             System.out.println("Received my own join packet before confirmation; ignoring.");
             return;
         }
-        if (packet.getPlayer().getID() == localPlayer.getID() || playersById.containsKey(packet.getPlayer().getID())) return;
+        if (packet.getID() == localPlayerId || playersById.containsKey(packet.getID())) return;
 
-        addRemotePlayer(packet.getPlayer());
+        Vector2 position = packet.getFinalPosition();
+        if (position == null) return;
+        Player player = createRemotePlayer(packet, position);
+        enemyPlayers.add(player);
+        playersById.put(packet.getID(), player);
     }
 
     private void moveEnemyPlayer(Packet packet) {
-        Player enemyPlayer = playersById.get(packet.getPlayer().getID());
-        Vector2 destination = packet.getPlayer().getPosition();
+        Player enemyPlayer = playersById.get(packet.getID());
+        Vector2 destination = packet.getFinalPosition();
         if (enemyPlayer == null || destination == null) return;
         movementSystem.setNetworkDestination(enemyPlayer, new Vector2(destination));
     }
 
     private void sendLocalMove(Vector2 targetPosition) {
-        if (localPlayer.getID() < 0) {
-            System.out.println("Cannot send MOVE before server assigns local player ID.");
+        if (localPlayerId < 0 || !localPlayer.isActiveTurn()) {
+            hudRenderer.showFeedback("Wait for your turn before moving.");
             return;
         }
-
-        PlayerState playerState = PlayerConverter.toPlayerState(localPlayer);
-        playerState.setPosition(new Vector2(targetPosition));
-
-        Packet packet = Packet.builder()
-            .player(playerState)
-            .action(Action.MOVE)
-            .build();
-        networkClient.send(packet);
+        if (anyPlayerMoving()) {
+            hudRenderer.showFeedback("Wait for the current movement animation to finish.");
+            return;
+        }
+        networkClient.move(localPlayerId, targetPosition);
     }
 
     private void receiveExistingPlayer(Packet packet) {
-        if (packet.getPlayer() == null) return;
-        if (packet.getPlayer().getID() == localPlayer.getID()
-            || playersById.containsKey(packet.getPlayer().getID())) return;
+        Vector2 position = packet.getFinalPosition();
+        if (position == null || packet.getID() == localPlayerId
+            || playersById.containsKey(packet.getID())) return;
 
-        Player existingPlayer = addRemotePlayer(packet.getPlayer());
-        if (existingPlayer == null) return;
-
-        Vector2 position = existingPlayer.getPosition();
+        Player existingPlayer = createRemotePlayer(packet, position);
+        enemyPlayers.add(existingPlayer);
+        playersById.put(packet.getID(), existingPlayer);
 
         if (receivingInitialPlayerList) {
-            System.out.println("Received existing player " + existingPlayer.getID()
+            System.out.println("Received existing player " + packet.getID()
                 + " at " + position.x + ", " + position.y);
         }
     }
 
-    private Player addRemotePlayer(PlayerState playerState) {
-        if (playerState.getPosition() == null) return null;
+    private boolean isPendingLocalJoin(Packet packet) {
+        if (localPlayerId >= 0 || localPlayer == null
+            || packet.getFinalPosition() == null) return false;
 
-        Player player = PlayerConverter.toPlayer(playerState);
-        enemyPlayers.add(player);
-        playersById.put(player.getID(), player);
-        return player;
+        return "local-player".equals(packet.getUsername())
+            && localPlayer.getPosition().epsilonEquals(packet.getFinalPosition(), 0.001f)
+            && packet.getCharacterClass() == chosenBuild.getCharacterClass();
     }
 
-    private boolean isPendingLocalJoin(Packet packet)
-    {
-        if (localPlayer == null || localPlayer.getID() >= 0
-            || packet.getPlayer().getPosition() == null) return false;
-
-        return localPlayer.getUsername().equals(packet.getPlayer().getUsername())
-            && packet.getPlayer().getTeam() == localPlayer.getTeam()
-            && localPlayer.getPosition().epsilonEquals(packet.getPlayer().getPosition(), 0.001f)
-            && packet.getPlayer().getCharacterClass() == localPlayer.getCharacterClass();
+    private Player createRemotePlayer(Packet packet, Vector2 position) {
+        CharacterClass characterClass = packet.getCharacterClass() == null
+            ? DEFAULT_REMOTE_CLASS : packet.getCharacterClass();
+        Race race = packet.getRace() == null ? CharacterBuild.DEFAULT_RACE : packet.getRace();
+        return new Player(packet.getID(), packet.getUsername(), new Vector2(position),
+            CharacterBuild.of(race, characterClass), packet.getTeamIndex());
     }
 
     private void removeEnemyPlayer(int id) {
@@ -347,13 +301,6 @@ public class GameOneScreen extends ScreenAdapter {
     }
 
     private void handleActionKeys() {
-
-        if(!localPlayerIsActive())
-        {
-//            System.out.println("WAIT FO YO TURN FOO");
-            return;
-        }
-
         if (availableActions == null) return;
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) && pendingTargetAction != null) {
@@ -368,139 +315,109 @@ public class GameOneScreen extends ScreenAdapter {
             Input.Keys.NUM_4
         };
 
-        for (int i = 0; i < keys.length && i < availableActions.length; i++) {
+        for (int i = 0; i < keys.length && i < availableActions.size(); i++) {
             if (!Gdx.input.isKeyJustPressed(keys[i])) continue;
             selectedActionIndex = i;
-            hudRenderer.setSelectedActionIndex(selectedActionIndex);
-            selectAction(availableActions[selectedActionIndex]);
+            hudRenderer.setSelectedActionIndex(i);
+            selectAction(availableActions.get(i));
             return;
         }
     }
 
-    private void selectAction(ActionType action) {
-        if (localPlayer.getStats().getHp() <= 0) {
+    private void selectAction(AbilityType ability) {
+        if (!localPlayer.isActiveTurn()) {
+            cancelTargetSelection(false);
+            hudRenderer.showFeedback("It is not your turn.");
+            return;
+        }
+        if (!localPlayer.isAlive()) {
             cancelTargetSelection(false);
             hudRenderer.showFeedback("A defeated player cannot act.");
             return;
         }
-
-        if (action.manaCost > 0 && localPlayer.getStats().getMana() < action.manaCost) {
-            cancelTargetSelection(false);
-            hudRenderer.showFeedback(ActionResult.noMana(action));
+        if (anyPlayerMoving()) {
+            hudRenderer.showFeedback("Wait for movement to finish before using an ability.");
             return;
         }
-
-        if (action.targetsSelf) {
+        if (localPlayer.isActionUsed()) {
             cancelTargetSelection(false);
-            executeSelfAction(action);
+            hudRenderer.showFeedback("Your action is spent. You may still move or end the turn.");
             return;
         }
-
-        boolean hasLivingTarget = false;
-        for (Player enemy : enemyPlayers) {
-            if (enemy.getStats().getHp() > 0) {
-                hasLivingTarget = true;
-                break;
-            }
-        }
-        if (!hasLivingTarget) {
+        if (localPlayer.cooldownTurns(ability) > 0) {
             cancelTargetSelection(false);
-            hudRenderer.showFeedback("No player is available to target.");
+            hudRenderer.showFeedback(ability.getDisplayName() + " is still recharging.");
             return;
         }
-
-        pendingTargetAction = action;
-        hudRenderer.showTargetingPrompt(action);
-        hudRenderer.showFeedback("Click the player you want to attack.");
+        if (localPlayer.getStats().getMana() < ability.getManaCost()) {
+            cancelTargetSelection(false);
+            hudRenderer.showFeedback("Not enough mana for " + ability.getDisplayName() + ".");
+            return;
+        }
+        if (ability.getTargetType() == TargetType.SELF) {
+            cancelTargetSelection(false);
+            sendAbility(ability, localPlayer, null);
+            return;
+        }
+        if (!ability.getTargetType().targetsGround() && !hasAnyLegalTarget(ability)) {
+            cancelTargetSelection(false);
+            hudRenderer.showFeedback("No legal target is available for "
+                + ability.getDisplayName() + ".");
+            return;
+        }
+        pendingTargetAction = ability;
+        hudRenderer.showTargetingPrompt(ability);
+        hudRenderer.showFeedback(ability.getTargetType().targetsGround()
+            ? "Click a tile on the battlefield." : "Click a highlighted player.");
     }
 
     /** Returns true while targeting so the click is not also interpreted as movement. */
     private boolean handleWorldClick(Vector2 clickedWorldPosition) {
         if (pendingTargetAction == null) return false;
 
-        Player selectedTarget = findClickedEnemy(clickedWorldPosition);
+        AbilityType ability = pendingTargetAction;
+        if (ability.getTargetType().targetsGround()) {
+            float distance = localPlayer.getPosition().dst(clickedWorldPosition);
+            if (distance > ability.getRange()) {
+                hudRenderer.showFeedback("Target is out of range ("
+                    + String.format("%.1f", distance) + "/"
+                    + String.format("%.1f", ability.getRange()) + ").");
+                return true;
+            }
+            cancelTargetSelection(false);
+            sendAbility(ability, null, clickedWorldPosition);
+            return true;
+        }
+
+        Player selectedTarget = findClickedTarget(clickedWorldPosition, ability);
         if (selectedTarget == null) {
             hudRenderer.showFeedback("Click directly on a highlighted player.");
             return true;
         }
-
-        ActionType action = pendingTargetAction;
         float targetDistance = localPlayer.getPosition().dst(selectedTarget.getPosition());
-        if (targetDistance > action.range) {
-            hudRenderer.showFeedback(ActionResult.outOfRange(
-                action, targetDistance, action.range));
+        if (targetDistance > ability.getRange()) {
+            hudRenderer.showFeedback("Target is out of range ("
+                + String.format("%.1f", targetDistance) + "/"
+                + String.format("%.1f", ability.getRange()) + ").");
             return true;
         }
-
         cancelTargetSelection(false);
-        ActionResult result = actionSystem.execute(localPlayer, selectedTarget, action);
-
-        if (result.outcome == ActionResult.Outcome.HIT
-            || result.outcome == ActionResult.Outcome.MISS)
-        {
-            localPlayer.getAnimationController().playAttack(
-                localPlayer.getPosition(), selectedTarget.getPosition(),
-                action.animation == ActionAnimation.CAST);
-        }
-
-        Action attack;
-        switch (selectedActionIndex)
-        {
-            case 0: attack = Action.PRIMARY;
-                break;
-            case 1: attack = Action.SECONDARY;
-                break;
-            case 2: attack = Action.TERTIARY;
-                break;
-            default: attack = Action.ULTIMATE;
-                break;
-        }
-
-
-        ArrayList<Integer> affectedPlayers = new ArrayList<>();
-        affectedPlayers.add(selectedTarget.getID());
-
-        Packet packet = Packet.builder()
-            .player(PlayerConverter.toPlayerState(localPlayer))
-            .affectedPlayersId(affectedPlayers)
-            .action(attack)
-            .build();
-
-        if (result.outcome == ActionResult.Outcome.HIT)
-        {
-
-            packet.setDeltaHealth(result.healingDone - result.damageDealt);
-
-
-            if (selectedTarget.getStats().getHp() <= 0)
-            {
-                packet.getKilledPlayersId().add(selectedTarget.getID());
-                selectedTarget.getAnimationController().playDeath();
-            }
-            else
-            {
-                selectedTarget.getAnimationController().playHurt(
-                    localPlayer.getPosition(), selectedTarget.getPosition());
-            }
-        }
-        else
-        {
-            packet.setDeltaHealth(result.healingDone - result.damageDealt);
-        }
-
-        networkClient.send(packet);
-
-        hudRenderer.showFeedback("Target: " + selectedTarget.getUsername()
-            + " — " + result.message);
-        System.out.println("[Action] " + result.message);
+        sendAbility(ability, selectedTarget, null);
         return true;
     }
 
-    private Player findClickedEnemy(Vector2 clickedWorldPosition) {
+    private Player findClickedTarget(Vector2 clickedWorldPosition, AbilityType ability) {
         Player best = null;
         float bestDistance = PlayerRenderer.TARGET_CLICK_RADIUS;
+        if (isLegalTarget(localPlayer, ability)) {
+            float localDistance = localPlayer.getPosition().dst(clickedWorldPosition);
+            if (localDistance <= bestDistance) {
+                best = localPlayer;
+                bestDistance = localDistance;
+            }
+        }
         for (Player enemy : enemyPlayers) {
-            if (enemy.getStats().getHp() <= 0) continue;
+            if (!isLegalTarget(enemy, ability)) continue;
             float distance = enemy.getPosition().dst(clickedWorldPosition);
             if (distance <= bestDistance) {
                 best = enemy;
@@ -510,16 +427,121 @@ public class GameOneScreen extends ScreenAdapter {
         return best;
     }
 
-    private void executeSelfAction(ActionType action) {
-        ActionResult result = actionSystem.execute(localPlayer, localPlayer, action);
-        if (result.outcome == ActionResult.Outcome.SELF_EFFECT) {
-            localPlayer.getAnimationController().playAttack(
-                localPlayer.getPosition(),
-                new Vector2(localPlayer.getPosition()).add(0f, 1f),
-                action.animation == ActionAnimation.CAST);
+    private boolean hasAnyLegalTarget(AbilityType ability) {
+        if (isLegalTarget(localPlayer, ability)) return true;
+        for (Player player : enemyPlayers) {
+            if (isLegalTarget(player, ability)) return true;
         }
-        hudRenderer.showFeedback(result);
-        System.out.println("[Action] " + result.message);
+        return false;
+    }
+
+    private boolean isLegalTarget(Player target, AbilityType ability) {
+        if (target == null || ability == null) return false;
+        switch (ability.getTargetType()) {
+            case ALLY:
+                return target.getTeamIndex() == localPlayer.getTeamIndex() && target.isAlive();
+            case DOWNED_ALLY:
+                return target.getTeamIndex() == localPlayer.getTeamIndex() && target.isDowned();
+            case ENEMY:
+                return target.getTeamIndex() != localPlayer.getTeamIndex() && target.isAlive();
+            default:
+                return false;
+        }
+    }
+
+    private void sendAbility(AbilityType ability, Player target, Vector2 point) {
+        int targetId = target == null ? -1 : target.getId();
+        networkClient.useAbility(localPlayerId, ability, targetId, point);
+        hudRenderer.showFeedback("Waiting for server: " + ability.getDisplayName());
+    }
+
+    private void applyMatchState(MatchState state) {
+        if (state == null || localPlayer == null) return;
+
+        Map<Integer, PlayerCombatState> incoming = new HashMap<>();
+        Map<Integer, Integer> previousHp = new HashMap<>();
+        for (PlayerCombatState playerState : state.getPlayers()) {
+            incoming.put(playerState.getId(), playerState);
+            Player player = playerState.getId() == localPlayerId
+                ? localPlayer : playersById.get(playerState.getId());
+            if (player == null) {
+                player = createRemotePlayer(playerState);
+                enemyPlayers.add(player);
+                playersById.put(player.getId(), player);
+            }
+
+            previousHp.put(player.getId(), player.getStats().getHp());
+            long previousMovement = player.getMovementSequence();
+            Vector2 authoritativePosition = playerState.getPosition();
+            player.applyCombatState(playerState);
+            if (authoritativePosition != null && previousMovement != playerState.getMovementSequence()) {
+                if (previousMovement < 0 || playerState.getMovementPath() == null || playerState.getMovementPath().isEmpty()) {
+                    player.getMovementController().stopMoving();
+                    player.setPosition(authoritativePosition.x, authoritativePosition.y);
+                } else {
+                    player.getMovementController().setAuthoritativePath(player.getPosition(),
+                        playerState.getMovementPath(), playerState.getRemainingMovement());
+                }
+            }
+        }
+
+        for (Player player : new ArrayList<>(enemyPlayers)) {
+            if (!incoming.containsKey(player.getId())) removeEnemyPlayer(player.getId());
+        }
+        if (navGrid != null) {
+            List<Vector2> occupied = state.getPlayers().stream()
+                .filter(other -> other.getId() != localPlayerId && other.getHp() > 0)
+                .map(PlayerCombatState::getPosition).filter(java.util.Objects::nonNull).toList();
+            navGrid.setOccupied(occupied);
+        }
+
+        Player actor = state.getLastActorId() == localPlayerId
+            ? localPlayer : playersById.get(state.getLastActorId());
+        Player firstDamaged = null;
+        for (PlayerCombatState playerState : state.getPlayers()) {
+            Player player = playerState.getId() == localPlayerId
+                ? localPlayer : playersById.get(playerState.getId());
+            int before = previousHp.getOrDefault(playerState.getId(), playerState.getHp());
+            if (player != null && playerState.getHp() < before) {
+                if (firstDamaged == null) firstDamaged = player;
+                if (playerState.getHp() <= 0) player.getAnimationController().playDeath();
+                else if (actor != null) player.getAnimationController().playHurt(
+                    actor.getPosition(), player.getPosition());
+            }
+        }
+
+        if (actor != null && state.getLastAbility() != null) {
+            Vector2 target = firstDamaged == null
+                ? new Vector2(actor.getPosition()).add(0f, 1f) : firstDamaged.getPosition();
+            actor.getAnimationController().playAttack(actor.getPosition(), target,
+                state.getLastAbility().getManaCost() > 0);
+        }
+
+        boolean localTurn = !state.isMatchOver() && state.getActivePlayerId() == localPlayerId;
+        if (mouseInputHandler != null) mouseInputHandler.setLocalPlayerTurn(localTurn);
+        if (!localTurn) cancelTargetSelection(false);
+        if (hudRenderer != null && state.getMessage() != null && !state.getMessage().isBlank()) {
+            hudRenderer.showFeedback(state.getMessage());
+        }
+        if (state.isMatchOver() && hudRenderer != null) {
+            String result = state.getWinningTeam() == 0 ? "Match ended in a draw."
+                : state.getWinningTeam() == teamIndex ? "Your team wins!" : "Your team was defeated.";
+            hudRenderer.showFeedback(result);
+            if (!postMatchShown) {
+                postMatchShown = true;
+                Gdx.app.postRunnable(() -> game.showPostMatch(teamIndex, chosenBuild,
+                    environment, localPlayerId, state));
+            }
+        }
+    }
+
+    private Player createRemotePlayer(PlayerCombatState state) {
+        CharacterClass characterClass = state.getCharacterClass() == null
+            ? DEFAULT_REMOTE_CLASS : state.getCharacterClass();
+        Race race = state.getRace() == null ? CharacterBuild.DEFAULT_RACE : state.getRace();
+        Vector2 position = state.getPosition() == null ? new Vector2() : state.getPosition();
+        return new Player(state.getId(), state.getUsername(), new Vector2(position),
+            CharacterBuild.of(race, characterClass), state.getTeamIndex());
     }
 
     private void cancelTargetSelection(boolean showMessage) {
@@ -532,21 +554,28 @@ public class GameOneScreen extends ScreenAdapter {
 
     private void endTurn() {
         cancelTargetSelection(false);
-        localPlayer.onTurnStart();
+        if (!localPlayer.isActiveTurn()) {
+            hudRenderer.showFeedback("It is not your turn.");
+            return;
+        }
+        if (anyPlayerMoving()) {
+            hudRenderer.showFeedback("Wait for movement to finish before ending the turn.");
+            return;
+        }
+        networkClient.endTurn(localPlayerId);
+    }
 
-        Packet packet = Packet.builder()
-            .player(PlayerConverter.toPlayerState(localPlayer))
-            .action(Action.END_TURN)
-            .build();
-        networkClient.send(packet);
-
-        System.out.println("Turn ended — movement distance reset.");
-
+    private boolean anyPlayerMoving() {
+        return localPlayer.getMovementController().isMoving()
+            || enemyPlayers.stream().anyMatch(player -> player.getMovementController().isMoving());
     }
 
     @Override
     public void resize(int width, int height) {
-        viewport.update(width, height, true);
+        int bottom = Math.round(HudRenderer.BOTTOM_HEIGHT * width / HudRenderer.VIRTUAL_WIDTH);
+        int top = Math.round(HudRenderer.TOP_HEIGHT * width / HudRenderer.VIRTUAL_WIDTH);
+        viewport.update(width, Math.max(1, height - bottom - top), true);
+        viewport.setScreenY(viewport.getScreenY() + bottom);
     }
 
     @Override
@@ -559,5 +588,6 @@ public class GameOneScreen extends ScreenAdapter {
         if (playerRenderer != null) playerRenderer.dispose();
         if (mapRenderer != null) mapRenderer.dispose();
         if (hudRenderer != null) hudRenderer.dispose();
+        if (battlefieldOverlay != null) battlefieldOverlay.dispose();
     }
 }

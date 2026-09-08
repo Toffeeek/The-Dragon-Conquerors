@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/movement/MovementController.java
 package com.github.thedragonconquerors.movement;
 
 import com.badlogic.gdx.math.Vector2;
@@ -20,11 +21,13 @@ public class MovementController {
     private int waypointIndex  = 0;
     @Getter
     private boolean moving     = false;
+    @Getter
+    private boolean authoritativePath;
 
     @Getter
     private float remainingMovementDistance;
     @Getter
-    private final float maxMovementDistance;
+    private float maxMovementDistance;
 
     public MovementController(float maxMovementDistance) {
         this.maxMovementDistance       = maxMovementDistance;
@@ -37,6 +40,7 @@ public class MovementController {
         this.path          = new ArrayList<>(newPath);
         this.waypointIndex = 0;
         this.moving        = true;
+        authoritativePath = false;
     }
 
     //returns new waypoint the player should walk
@@ -89,6 +93,31 @@ public class MovementController {
         setPath(newPath);
     }
 
+    /** Animates an accepted server move while ending on the server's stamina value. */
+    public void setAuthoritativePath(Vector2 currentPos, List<Vector2> newPath,
+                                     float remainingAfterMove)
+    {
+        if (newPath == null || newPath.isEmpty()) {
+            remainingMovementDistance = Math.max(0f, remainingAfterMove);
+            stopMoving();
+            return;
+        }
+        remainingMovementDistance = Math.max(0f, remainingAfterMove);
+        setPath(newPath);
+        authoritativePath = true;
+    }
+
+    public void synchronizeRemainingDistance(float authoritativeRemaining)
+    {
+        remainingMovementDistance = Math.max(0f, authoritativeRemaining);
+    }
+
+    public void synchronizeMovement(float authoritativeMax, float authoritativeRemaining)
+    {
+        maxMovementDistance = Math.max(0f, authoritativeMax);
+        synchronizeRemainingDistance(authoritativeRemaining);
+    }
+
     private float pathDistance(Vector2 start, List<Vector2> newPath)
     {
         float distance = 0f;
@@ -107,6 +136,10 @@ public class MovementController {
     {
         if (path.isEmpty()) return null;
         return path.get(path.size() - 1);
+    }
+
+    public List<Vector2> getRemainingPath() {
+        return moving ? path.subList(Math.min(waypointIndex, path.size()), path.size()) : List.of();
     }
 
 }

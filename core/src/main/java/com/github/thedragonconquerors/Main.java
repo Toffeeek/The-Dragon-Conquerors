@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/Main.java
 package com.github.thedragonconquerors;
 
 import com.badlogic.gdx.Application;
@@ -15,9 +16,10 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
-import com.shared.shared.model.CharacterClass;
+import com.shared.shared.model.CharacterBuild;
 import com.shared.shared.model.Packet;
-import com.shared.shared.model.TEAM;
+import com.shared.shared.model.world.Environment;
+import com.shared.shared.network.MatchState;
 import lombok.Getter;
 
 import java.io.BufferedReader;
@@ -33,6 +35,7 @@ import java.net.SocketException;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -113,21 +116,22 @@ public class Main extends Game
         setScreen(LobbyScreen.class);
     }
 
-    public void startGame(int teamIndex, CharacterClass chosenClass)
+    public void startGame(int teamIndex, CharacterBuild chosenBuild,
+                          Environment environment, int localPlayerId,
+                          List<Packet> roster, MatchState initialState)
     {
-        com.shared.shared.model.TEAM team;
-        switch(teamIndex)
-        {
-            case 1: team = TEAM.BLUE;
-                    break;
-            case 2: team = TEAM.RED;
-                break;
-            default: team = TEAM.UNASSIGNED;
-                break;
-        }
-
-        addScreen(new GameOneScreen(this, team, chosenClass));
+        addScreen(new GameOneScreen(this, teamIndex, chosenBuild, environment,
+            localPlayerId, roster, initialState));
         setScreen(GameOneScreen.class);
+    }
+
+    public void showPostMatch(int teamIndex, CharacterBuild chosenBuild,
+                              Environment environment, int localPlayerId,
+                              MatchState finalState)
+    {
+        addScreen(new PostMatchScreen(this, teamIndex, chosenBuild, environment,
+            localPlayerId, finalState));
+        setScreen(PostMatchScreen.class);
     }
 
     /** Disconnects the current client, stops a locally hosted server, and returns to the cached menu. */
@@ -155,11 +159,17 @@ public class Main extends Game
         if(serverProcess != null && serverProcess.isAlive()) return false;
 
         File rootDir = findProjectRoot();
-        String gradlew = System.getProperty("os.name").toLowerCase().contains("win") ? "gradlew.bat" : "./gradlew";
+        // Launch the wrapper with Java directly: Windows does not resolve a bare
+        // gradlew.bat against ProcessBuilder.directory(), especially in spaced paths.
+        String javaName = System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java";
+        File javaExecutable = new File(System.getProperty("java.home"), "bin/" + javaName);
+        File wrapperJar = new File(rootDir, "gradle/wrapper/gradle-wrapper.jar");
         localServerPort = findAvailablePort();
 
         ProcessBuilder processBuilder = new ProcessBuilder(
-            gradlew,
+            javaExecutable.getAbsolutePath(),
+            "-Dorg.gradle.appname=gradlew",
+            "-jar", wrapperJar.getAbsolutePath(),
             ":server:bootRun",
             "--args=--server.port=" + localServerPort
         );
@@ -340,7 +350,7 @@ public class Main extends Game
         switch(packet.getAction())
         {
             case PRIVATE_JOIN_CONFIRMATION:
-                System.out.println("My player ID is " + packet.getPlayer().getID());
+                System.out.println("My player ID is " + packet.getID());
                 break;
             case PLAYER_COORDINATE:
             case JOIN:

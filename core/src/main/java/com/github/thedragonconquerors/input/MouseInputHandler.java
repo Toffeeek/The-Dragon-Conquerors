@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/input/MouseInputHandler.java
 package com.github.thedragonconquerors.input;
 
 import com.badlogic.gdx.Input;
@@ -8,9 +9,7 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.movement.MovementSystem;
-import lombok.Setter;
 
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -22,29 +21,27 @@ public class MouseInputHandler extends InputAdapter {
     private final MovementSystem movementSystem;
     private final Function<Vector2, Boolean> onWorldClick;
     private final Consumer<Vector2> onMoveCallback;
-    private final BooleanSupplier localPlayerActiveCheck;
     private final Vector3 unprojectScratch = new Vector3();
-    @Setter
     private boolean isLocalPlayerTurn = true;
 
     public MouseInputHandler(OrthographicCamera camera, Viewport viewport,
                              Player player, MovementSystem movementSystem,
                              Function<Vector2, Boolean> onWorldClick,
-                             Consumer<Vector2> onMoveCallback,
-                             BooleanSupplier localPlayerActiveCheck) {
+                             Consumer<Vector2> onMoveCallback) {
         this.camera = camera;
         this.viewport = viewport;
         this.player = player;
         this.movementSystem = movementSystem;
         this.onWorldClick = onWorldClick;
         this.onMoveCallback = onMoveCallback;
-        this.localPlayerActiveCheck = localPlayerActiveCheck;
     }
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
         if (!isLocalPlayerTurn || button != Input.Buttons.LEFT) return false;
-        if (localPlayerActiveCheck != null && !localPlayerActiveCheck.getAsBoolean()) return false;
+        int bottomY = com.badlogic.gdx.Gdx.graphics.getHeight() - screenY;
+        if (screenX < viewport.getScreenX() || screenX >= viewport.getScreenX() + viewport.getScreenWidth()
+            || bottomY < viewport.getScreenY() || bottomY >= viewport.getScreenY() + viewport.getScreenHeight()) return false;
 
         unprojectScratch.set(screenX, screenY, 0f);
         camera.unproject(unprojectScratch,
@@ -58,12 +55,12 @@ public class MouseInputHandler extends InputAdapter {
             return true;
         }
 
-        if (!movementSystem.setDestination(player, clickedWorldPosition)) {
-            return true;
-        }
-
-        Vector2 target = player.getMovementController().getTargetPosition();
+        Vector2 target = movementSystem.previewDestination(player, clickedWorldPosition);
         if (target != null && onMoveCallback != null) onMoveCallback.accept(target);
         return true;
+    }
+
+    public void setLocalPlayerTurn(boolean localPlayerTurn) {
+        this.isLocalPlayerTurn = localPlayerTurn;
     }
 }

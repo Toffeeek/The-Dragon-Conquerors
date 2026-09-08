@@ -13,6 +13,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry)
     {
+        registry.setPreserveReceiveOrder(true);
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*");
 
@@ -25,6 +26,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer
     public void configureMessageBroker(MessageBrokerRegistry registry)
     {
         registry.enableSimpleBroker("/match", "/queue");
+        registry.setPreservePublishOrder(true);
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
     }
