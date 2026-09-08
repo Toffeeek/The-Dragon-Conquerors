@@ -77,7 +77,7 @@ public class GameOneScreen extends ScreenAdapter {
         this.batch = game.getBatch();
         this.networkClient.setPacketHandler(packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
         this.availableActions = ActionType.availableFor(chosenClass);
-        
+
         Vector2 startingPosition = team == TEAM.BLUE ? GAMEONE_BLUE_SPAWN : GAMEONE_RED_SPAWN;
         createLocalPlayer(team, startingPosition, chosenClass);
     }
@@ -110,7 +110,6 @@ public class GameOneScreen extends ScreenAdapter {
             this::handleWorldClick, this::sendLocalMove, this::localPlayerIsActive);
         Gdx.input.setInputProcessor(mouseInputHandler);
     }
-
     private void createLocalPlayer(TEAM team, Vector2 startingPosition, CharacterClass chosenClass)
     {
         this.localPlayer = new Player(-1, "default-username", team, startingPosition, chosenClass);
