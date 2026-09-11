@@ -5,7 +5,7 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 import com.github.thedragonconquerors.Main;
 
 
-// this should be here 
+// this should be here
 
 /** Launches the desktop (LWJGL3) application. */
 public class Lwjgl3Launcher
