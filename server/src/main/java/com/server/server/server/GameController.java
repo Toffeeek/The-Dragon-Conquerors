@@ -79,6 +79,7 @@ public class GameController {
             .ID(player.getId())
             .roomId(room.getId())
             .testingMode(room.isTestingMode())
+            .environment(room.getTestEnvironment())
             .connectedPlayers(room.getLobby().size())
             .action(Action.PRIVATE_JOIN_CONFIRMATION)
             .build());
@@ -124,7 +125,7 @@ public class GameController {
             || packet == null || packet.getID() != (Integer) playerId) return;
         MatchRoom room = assignedRoom.get();
         try {
-            MatchState state = room.startTestMatch((Integer) playerId);
+            MatchState state = room.startTestMatch((Integer) playerId, packet.getEnvironment());
             broadcast(room, Packet.builder().action(Action.MATCH_START)
                 .environment(state.getEnvironment()).matchState(state)
                 .connectedPlayers(room.getLobby().size()).build());

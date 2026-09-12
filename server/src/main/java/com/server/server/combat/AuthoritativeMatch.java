@@ -10,6 +10,8 @@ import com.shared.shared.model.combat.CombatContext;
 import com.shared.shared.model.combat.Combatant;
 import com.shared.shared.model.combat.TurnQueue;
 import com.shared.shared.model.combat.TurnStartReport;
+import com.shared.shared.model.combat.StatusEffectEngine;
+import com.shared.shared.model.effect.StatusEffectType;
 import com.shared.shared.model.world.Environment;
 import com.shared.shared.model.world.BattlefieldDefinition;
 import com.shared.shared.model.world.BattlefieldNavigation;
@@ -103,10 +105,12 @@ public final class AuthoritativeMatch {
         List<Vector2> path = navigation.findPath(actor.getPosition(), destination, actor.getRemainingMovement(), occupied);
         if (path.isEmpty()) return CombatCommandResult.rejected("No movement points or no safe route around terrain and players.");
         float distance = BattlefieldNavigation.length(actor.getPosition(), path);
+        boolean touchedCrack = battlefield.pathTouchesBurningCrack(actor.getPosition(), path);
         actor.moveAlong(path);
         lastActorId = playerId;
         lastAbility = null;
         lastMessage = actor.getUsername() + " moves " + String.format("%.1f", distance) + " units.";
+        if (touchedCrack) applyCrackBurn(actor);
         autoEndTurn(actor);
         return CombatCommandResult.accepted(snapshot());
     }
@@ -140,7 +144,15 @@ public final class AuthoritativeMatch {
         lastMessage = outcome.describe();
         resolvePushes(outcome, positionsBefore);
         for (ServerCombatant player : players.values()) {
-            if (!player.getPosition().epsilonEquals(positionsBefore.get(player.getId()), 0.001f)) player.markDisplaced();
+            Vector2 before = positionsBefore.get(player.getId());
+            if (!player.getPosition().epsilonEquals(before, 0.001f)) {
+                player.markDisplaced();
+                // Teleport touches only its landing spot; pushes traverse the intervening ground.
+                boolean touchedCrack = player == actor && ability == AbilityType.TELEPORT
+                    ? battlefield.isBurningCrack(player.getPosition())
+                    : battlefield.pathTouchesBurningCrack(before, List.of(player.getPosition()));
+                if (touchedCrack) applyCrackBurn(player);
+            }
         }
         if (!finishIfOver()) autoEndTurn(actor);
         return CombatCommandResult.accepted(snapshot());
@@ -231,6 +243,13 @@ public final class AuthoritativeMatch {
         }
     }
 
+    private void applyCrackBurn(ServerCombatant player) {
+        if (context.getEffects().apply(player, StatusEffectType.BURN,
+            StatusEffectEngine.ENVIRONMENT_SOURCE_ID, 2)) {
+            lastMessage += " " + player.getUsername() + " steps on a glowing crack: Burn for 2 turns.";
+        }
+    }
+
     private boolean finishIfOver() {
         if (matchOver) return true;
         if (!isBattleFinished()) return false;
@@ -278,7 +297,11 @@ public final class AuthoritativeMatch {
             if (target == null || start == null) continue;
 
             Vector2 destination = target.getPosition();
-            if (battlefield.getEnvironment() == Environment.CANYON
+            if (battlefield.pushEntersLava(start, destination)) {
+                target.getStats().setHp(0);
+                target.getPosition().set(battlefield.lastWalkablePoint(start, destination));
+                lastMessage += " " + target.getUsername() + " is thrown into lava and dies instantly.";
+            } else if (battlefield.getEnvironment() == Environment.CANYON
                 && battlefield.pathCrossesLethalFall(start, destination)) {
                 target.getStats().setHp(0);
                 target.getPosition().set(battlefield.lastWalkablePoint(start, destination));

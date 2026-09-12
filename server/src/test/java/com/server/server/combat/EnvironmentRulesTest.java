@@ -37,13 +37,13 @@ class EnvironmentRulesTest {
     }
 
     @Test
-    void lavaBurnsTheFirstPlayerBeforeTheyAct() {
+    void lavaDoesNotBurnPlayersOnSafeGround() {
         AuthoritativeMatch match = match(Environment.LAVA, defaultPlayers(), resolver());
         PlayerCombatState active = match.snapshot().getPlayers().stream()
             .filter(PlayerCombatState::isActiveTurn).findFirst().orElseThrow();
         assertEquals(0, active.getId());
-        assertTrue(active.getHp() < active.getMaxHp());
-        assertTrue(active.getEffects().stream()
+        assertEquals(active.getMaxHp(), active.getHp());
+        assertFalse(active.getEffects().stream()
             .anyMatch(effect -> effect.getType() == StatusEffectType.BURN));
     }
 

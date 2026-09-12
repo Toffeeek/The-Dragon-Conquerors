@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "game.testing-mode=true")
+    properties = {"game.testing-mode=true", "game.testing-environment=CANYON"})
 class SoloTestingWebSocketTest {
     @LocalServerPort private int port;
 

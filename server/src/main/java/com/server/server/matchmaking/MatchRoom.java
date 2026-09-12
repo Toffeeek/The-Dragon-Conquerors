@@ -14,6 +14,7 @@ import java.util.Set;
 public final class MatchRoom {
     private final String id;
     private final boolean testingMode;
+    private final Environment testEnvironment;
     private final LobbyStateService lobby;
     private final MatchService matches = new MatchService();
     private final Set<String> readySessions = new HashSet<>();
@@ -24,14 +25,24 @@ public final class MatchRoom {
     }
 
     MatchRoom(String id, EnvironmentVoteResolver voteResolver, boolean testingMode) {
+        this(id, voteResolver, testingMode, Environment.CANYON);
+    }
+
+    MatchRoom(String id, EnvironmentVoteResolver voteResolver, boolean testingMode, Environment testEnvironment) {
         this.id = id;
         this.testingMode = testingMode;
+        this.testEnvironment = testEnvironment;
         this.lobby = new LobbyStateService(voteResolver);
     }
 
     public boolean isTestingMode() { return testingMode; }
+    public Environment getTestEnvironment() { return testEnvironment; }
 
     public synchronized MatchState startTestMatch(int playerId) {
+        return startTestMatch(playerId, null);
+    }
+
+    public synchronized MatchState startTestMatch(int playerId, Environment selectedEnvironment) {
         if (!testingMode) throw new IllegalArgumentException("Testing mode is disabled.");
         if (!lobby.contains(playerId)) throw new IllegalArgumentException("Join before starting a test.");
         if (matches.isRunning()) throw new IllegalArgumentException("A match is already in progress.");
@@ -39,7 +50,7 @@ public final class MatchRoom {
             throw new IllegalArgumentException("A player is still joining. Try Start Test again shortly.");
         }
         lobby.startTesting();
-        return matches.start(lobby.players(), Environment.CANYON, true);
+        return matches.start(lobby.players(), selectedEnvironment == null ? testEnvironment : selectedEnvironment, true);
     }
 
     public String getId() {

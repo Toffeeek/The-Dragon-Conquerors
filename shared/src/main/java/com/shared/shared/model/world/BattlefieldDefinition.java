@@ -53,6 +53,10 @@ public final class BattlefieldDefinition {
     public List<BattlefieldZone> getZones() { return zones; }
 
     public Vector2 spawnFor(int teamIndex, int teamSlot) {
+        if (environment == Environment.LAVA) {
+            return teamIndex == 1 ? new Vector2(5.2f, teamSlot <= 0 ? 12.7f : 15.6f)
+                : new Vector2(25.8f, teamSlot <= 0 ? 7.4f : 12.8f);
+        }
         if (teamIndex == 1) return teamSlot <= 0 ? new Vector2(2f, 5f) : new Vector2(4.5f, 12.5f);
         return new Vector2(28f, teamSlot <= 0 ? 9f : 12f);
     }
@@ -63,11 +67,49 @@ public final class BattlefieldDefinition {
     }
 
     public boolean isHazard(Vector2 point) {
-        return contains(BattlefieldZoneType.HAZARD, point);
+        return isBurningCrack(point) || contains(BattlefieldZoneType.HAZARD, point);
+    }
+
+    public boolean isBurningCrack(Vector2 point) {
+        return environment == Environment.LAVA && isInside(point) && "crack".equals(terrain.at(point.x, point.y));
+    }
+
+    /** Check the actual accepted route, not a straight line to the requested destination. */
+    public boolean pathTouchesBurningCrack(Vector2 start, List<Vector2> path) {
+        if (environment != Environment.LAVA) return false;
+        Vector2 previous = start;
+        Vector2 sample = new Vector2();
+        for (Vector2 end : path) {
+            int steps = Math.max(1, (int)Math.ceil(previous.dst(end) / TRACE_STEP));
+            for (int step = 0; step <= steps; step++) {
+                sample.set(previous).lerp(end, step / (float)steps);
+                if (isBurningCrack(sample)) return true;
+            }
+            previous = end;
+        }
+        return false;
     }
 
     public boolean isLethalFall(Vector2 point) {
         return !isInside(point) || "fall".equals(terrain.at(point.x, point.y));
+    }
+
+    public boolean isLava(Vector2 point) {
+        return environment == Environment.LAVA && isInside(point) && "lava".equals(terrain.at(point.x, point.y));
+    }
+
+    /** Stop at solid props before considering lava behind them. A push can cross an open lava edge. */
+    public boolean pushEntersLava(Vector2 start, Vector2 end) {
+        if (environment != Environment.LAVA || !isInside(start) || end == null
+            || !Float.isFinite(end.x) || !Float.isFinite(end.y)) return false;
+        int steps = Math.max(1, (int)Math.ceil(start.dst(end) / TRACE_STEP));
+        Vector2 sample = new Vector2();
+        for (int step=0; step<=steps; step++) {
+            sample.set(start).lerp(end, step/(float)steps);
+            if (isLava(sample)) return true;
+            if (!isInside(sample) || "blocked".equals(terrain.at(sample.x,sample.y))) return false;
+        }
+        return false;
     }
 
     public boolean isWalkable(Vector2 point) {

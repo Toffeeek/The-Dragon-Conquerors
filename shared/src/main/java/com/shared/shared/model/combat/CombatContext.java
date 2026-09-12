@@ -113,7 +113,7 @@ public final class CombatContext {
      * @param standingOnHazard whether the combatant is on a hazard tile. The caller
      *                         supplies it because tile lookup needs the loaded map,
      *                         which this module knows nothing about. Irrelevant on
-     *                         Lava, which burns everyone, and on Canyon, which has
+     *                         Lava, whose cracks apply burn on movement, and on Canyon, which has
      *                         no turn-start hazard at all
      */
     public TurnStartReport beginTurn(Combatant combatant, boolean standingOnHazard) {

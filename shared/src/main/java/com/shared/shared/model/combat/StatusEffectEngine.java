@@ -23,7 +23,7 @@ import java.util.List;
  * is load-bearing rather than incidental:</p>
  *
  * <ol>
- *   <li><b>Environment</b> applies first, so a Lava map's burn is dealt on the
+ *   <li><b>Environment</b> applies first, so a Bog tile's poison is dealt on the
  *       same turn it is inflicted rather than a turn later.</li>
  *   <li><b>Damage-over-time</b> is dealt next, from every active effect.</li>
  *   <li><b>Stun</b> is checked <em>before</em> timers advance. A 1-turn stun must
@@ -289,8 +289,8 @@ public class StatusEffectEngine {
     /**
      * The effect an environment inflicts on a combatant this turn, or {@code null}.
      *
-     * <p>Lava affects everyone wherever they stand; Bog only affects a combatant on
-     * a hazard tile; Canyon inflicts nothing, since its danger is falling off,
+     * <p>Bog affects a combatant on a hazard tile. Lava crack burn is applied by
+     * movement contact, not renewed here. Canyon inflicts nothing; its danger is falling off,
      * which is a movement concern rather than a turn-start one.</p>
      */
     private StatusEffectType hazardEffectFor(Environment environment, boolean standingOnHazard) {

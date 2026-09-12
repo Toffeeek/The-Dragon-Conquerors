@@ -59,7 +59,8 @@ Combat controls:
 Map voting and the four-player minimum are temporarily bypassed:
 
 1. Choose a team, class, and race, then click **JOIN GAME**.
-2. Click **START TEST** to enter Canyon immediately with 1-4 connected players.
+2. Select **Bog**, **Lava**, or **Canyon**, then click **START TEST** with 1-4 connected players.
+   The player pressing Start Test chooses the map; no votes are needed, including in solo play.
    Friends must join before starting; the two-player-per-team limit still applies.
 3. Move, use available abilities, and end turns as usual. Solo or single-team tests
    stay playable instead of immediately declaring a winner. Tests that start with
@@ -71,6 +72,29 @@ is active, the first `Esc` cancels targeting. Solo tests do not add bots or enem
 To restore map voting later, set `game.testing-mode=false` in
 `server/src/main/resources/application.properties` and restart the server. Restart
 the server and game after updating to use the new testing flow.
+
+Set `game.testing-environment=CANYON`, `LAVA`, or `BOG` in the same server properties
+to change the initially selected test map. You can override it using the map cards before starting.
+
+### New Lava battlefield
+
+The supplied `lava_map.svg` is preserved under `assets/maps-new/`. Its embedded PNG
+is extracted unchanged as `lava-map.png`, which is rendered across the 30x17 world.
+`lava-collision.xml` supplies tight solid-prop and bridge-rail outlines in original
+image coordinates; the build derives the molten sea and enclosed lava ring from
+the artwork and packages `lava-mask.bin` for the client and server.
+
+- Bridges and rock platforms allow movement; molten lava, rocks, pillars, crystals,
+  the furnace, gate and railings block walking/teleport destinations.
+- A forced push across an open lava edge kills immediately, even if it would end
+  on solid ground beyond a narrow lava channel. Solid railings stop pushes.
+- Glowing cracks stay walkable but apply Burn on contact: 8 HP at the start of
+  each of the player's next two turns (16 HP total). Crossing a crack or teleporting
+  onto it counts; teleporting over it does not. Repeated contact refreshes rather
+  than stacks Burn. Standing still does not refresh it. Ice can cleanse Burn.
+  Safe ground no longer applies global Burn, and torches are not lava pools.
+- Lava has its own safe team spawn positions. Its map is loaded as an image;
+  `lava.tmx` is the legacy placeholder and is not used by the Lava renderer.
 
 ## Multiplayer selection flow (when testing mode is disabled)
 
@@ -103,10 +127,10 @@ hazards, lethal falls, and path validation. Both the Spring Boot server and libG
 that geometry, so the navigation preview agrees with authoritative command validation.
 
 - Bog poison pools are walkable hazards that apply poison when a combatant begins a turn in one.
-- Lava applies the environment's global burn effect at turn start.
+- Lava's glowing cracks apply a two-turn burn on contact; being pushed into molten lava kills instantly.
 - Canyon chasms block ordinary movement; a forced push across a lethal edge defeats the target.
 
-Terrain collision is loaded from the same TMX tile data used for the map artwork.
+Bog and Canyon collision is loaded from the same TMX tile data used for their artwork.
 `assets/maps-new/tileset.tsx` marks terrain types and declares the walkable grass palette.
 The build generates a pixel collision mask directly from `tileset.png`; mixed shoreline tiles
 are no longer blocked as full squares. Water and cliff pixels block a small circular foot collider
@@ -115,7 +139,8 @@ apply the same transform to artwork and collision. Navigation uses a finer 0.125
 The shared JAR packages the generated mask for both server and client; rebuild and restart both
 after editing maps or the tileset. Update `walkableColors` when introducing a new ground palette.
 There are no synthetic black rectangles or red collision outlines over Canyon.
-Bog's poison overlay only shades walkable ground. These maps still share placeholder artwork.
+Bog's poison overlay only shades walkable ground. Bog and Canyon still share placeholder artwork;
+Lava uses the separate image-derived collision described above.
 
 ## Authoritative combat
 

@@ -70,6 +70,7 @@ public class LobbyScreen extends ScreenAdapter {
     private boolean voteSent;
     private boolean matchStarting;
     private boolean testingMode = true;
+    private Environment testingEnvironment;
     private boolean roomReady;
     private boolean startRequested;
 
@@ -256,7 +257,7 @@ public class LobbyScreen extends ScreenAdapter {
                     nextButton.setDisabled(!roomReady || startRequested);
                     nextButton.setText(!roomReady ? "JOINING..."
                         : startRequested ? "STARTING..." : "START TEST");
-                    footerHelpLabel.setText("Start alone, or let friends join before starting.");
+                    footerHelpLabel.setText("Choose a map, then start alone or with friends.");
                     break;
                 }
                 selectionHost.add(createEnvironmentPanel()).grow();
@@ -413,13 +414,40 @@ public class LobbyScreen extends ScreenAdapter {
     }
 
     private Table createTestingPanel() {
-        Table panel = panel("READY TO TEST", "Map voting is temporarily disabled. Canyon loads automatically.");
+        Table panel = panel("CHOOSE YOUR TEST MAP",
+            "No votes or full party needed. The player pressing Start Test chooses the battlefield.");
+        Table cards = new Table();
+        ButtonGroup<TextButton> group = new ButtonGroup<>();
+        group.setMinCheckCount(0);
+        group.setMaxCheckCount(1);
+        for (Environment environment : Environment.values()) {
+            TextButton button = new TextButton(environment.getDisplayName().toUpperCase()
+                + "\n" + environment.hazardSummary(), skin, "class-card");
+            button.getLabel().setWrap(true);
+            button.getLabel().setAlignment(Align.center);
+            group.add(button);
+            button.setChecked(environment == testingEnvironment);
+            button.setDisabled(!roomReady || startRequested);
+            button.addListener(new ClickListener() {
+                @Override public void clicked(InputEvent event, float x, float y) {
+                    if (!roomReady || startRequested) return;
+                    testingEnvironment = environment;
+                    Gdx.app.postRunnable(() -> showStep());
+                }
+            });
+            cards.add(button).width(222f).height(120f).pad(5f);
+        }
+        panel.add(cards).left().row();
+        Label choice = new Label(testingEnvironment == null ? "Waiting for the server's default map..."
+            : "Selected: " + testingEnvironment.getDisplayName() + " - " + testingEnvironment.getDescription(), skin, "default");
+        choice.setWrap(true);
+        panel.add(choice).width(660f).left().padTop(14f).row();
         Label details = new Label("Players connected: " + connectedPlayers
             + "\n\nStart with 1-4 players. No full party is required."
             + "\nSolo play stays open for movement and ability testing."
             + "\n\nPress Esc in the battlefield to return to the menu.", skin, "default");
         details.setWrap(true);
-        panel.add(details).width(660f).left().padTop(25f).row();
+        panel.add(details).width(660f).left().padTop(18f).row();
         return panel;
     }
 
@@ -469,7 +497,7 @@ public class LobbyScreen extends ScreenAdapter {
             showStep();
         } else if (step == Step.ENVIRONMENT && testingMode && roomReady && !startRequested) {
             startRequested = true;
-            game.getNetworkClient().startTestMatch(localPlayerId);
+            game.getNetworkClient().startTestMatch(localPlayerId, testingEnvironment);
             showStep();
         }
     }
@@ -507,6 +535,7 @@ public class LobbyScreen extends ScreenAdapter {
             case PRIVATE_JOIN_CONFIRMATION:
                 localPlayerId = packet.getID();
                 testingMode = packet.isTestingMode();
+                testingEnvironment = packet.getEnvironment();
                 connectedPlayers = Math.max(connectedPlayers, packet.getConnectedPlayers());
                 String roomName = packet.getRoomId() == null ? "match room" : packet.getRoomId();
                 lobbyStatusLabel.setText("Assigned to " + roomName + " as player "

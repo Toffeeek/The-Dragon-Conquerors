@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Coordinates in the unmodified 1672x941 source image. Orange sea is detected
+     from the border-connected color region; these outlines describe solid props. -->
+<collision width="1672" height="941">
+  <lava-seed name="enclosed-southwest-lava-ring" x="125" y="780"/>
+  <!-- Only glowing pixels within these bounds inflict burn; surrounding rock stays safe. -->
+  <crack x="101" y="141" width="60" height="47"/>
+  <crack x="425" y="140" width="63" height="54"/>
+  <crack x="434" y="258" width="57" height="48"/>
+  <crack x="875" y="347" width="28" height="24"/>
+  <crack x="803" y="510" width="63" height="58"/>
+  <crack x="1500" y="142" width="77" height="65"/>
+  <crack x="1190" y="458" width="69" height="59"/>
+  <crack x="745" y="719" width="70" height="60"/>
+  <crack x="855" y="820" width="65" height="59"/>
+  <polygon name="furnace" points="233,126 254,94 326,92 348,129 355,197 329,211 251,209 231,182"/>
+  <polygon name="north-left-crystal" points="92,78 117,49 145,83 139,103 94,103"/>
+  <polygon name="west-crystal" points="90,235 117,206 142,237 141,260 96,258"/>
+  <polygon name="north-rocks" points="465,116 487,92 507,122 505,137 466,135"/>
+  <polygon name="west-rocks" points="498,250 518,220 548,253 542,266 502,263"/>
+  <polygon name="southwest-rocks" points="112,538 151,511 178,549 191,599 168,613 118,608 98,584"/>
+  <polygon name="southwest-crystal" points="305,705 327,672 352,711 346,733 308,733"/>
+  <polygon name="southwest-low-rocks" points="196,815 222,792 245,810 266,798 277,830 251,846 221,840"/>
+  <polygon name="central-tree" points="744,192 756,176 777,193 790,174 804,180 802,220 814,219 807,241 798,247 800,273 778,264 753,275 756,251 749,236"/>
+  <polygon name="central-rocks" points="851,293 898,259 920,293 922,327 892,337 850,328"/>
+  <polygon name="central-crystal" points="904,369 930,341 953,365 954,391 910,393"/>
+  <polygon name="central-lower-crystal" points="753,499 777,472 807,480 806,505 786,520 755,516"/>
+  <polygon name="central-lower-rocks" points="872,546 896,530 916,550 914,571 882,574"/>
+  <polygon name="east-upper-rocks" points="1445,110 1484,72 1501,114 1514,132 1496,148 1450,144"/>
+  <polygon name="east-rocks" points="1170,342 1205,302 1234,331 1241,369 1210,386 1174,374"/>
+  <polygon name="east-small-rocks" points="1526,227 1546,210 1563,225 1569,247 1545,261 1524,250"/>
+  <polygon name="east-mid-rocks" points="1299,430 1321,413 1349,431 1350,448 1320,458 1299,447"/>
+  <polygon name="east-low-rocks" points="1327,558 1347,536 1374,558 1377,579 1352,590 1330,578"/>
+  <polygon name="gate" points="1363,332 1388,295 1426,277 1466,278 1504,303 1525,341 1527,418 1494,420 1494,379 1395,379 1395,418 1364,419"/>
+  <polygon name="southeast-rocks" points="1292,727 1340,695 1362,720 1375,766 1356,787 1329,779 1290,780 1281,752"/>
+  <polygon name="southeast-crystal" points="1368,853 1395,819 1419,846 1423,878 1370,879"/>
+  <polygon name="isolated-rocks" points="687,663 726,636 752,666 765,697 744,717 696,711 676,688"/>
+  <!-- Narrow bridge rails: keep the road between them open. -->
+  <rect name="upper-left-rail" x="153" y="31" width="21" height="116"/>
+  <rect name="upper-right-rail" x="417" y="30" width="22" height="116"/>
+  <rect name="upper-back-left" x="174" y="43" width="78" height="15"/>
+  <rect name="upper-back-right" x="388" y="43" width="29" height="15"/>
+  <rect name="upper-west-post" x="152" y="204" width="24" height="49"/>
+  <rect name="upper-east-post" x="417" y="204" width="24" height="49"/>
+  <rect name="west-neck-left" x="226" y="281" width="20" height="127"/>
+  <rect name="west-neck-right" x="341" y="263" width="22" height="120"/>
+  <rect name="west-bridge-north" x="363" y="374" width="320" height="29"/>
+  <rect name="west-bridge-south-left" x="227" y="450" width="147" height="49"/>
+  <rect name="west-bridge-south-right" x="479" y="451" width="207" height="49"/>
+  <rect name="southwest-bridge-left" x="365" y="474" width="21" height="193"/>
+  <rect name="southwest-bridge-right" x="470" y="475" width="22" height="193"/>
+  <rect name="east-bridge-north" x="938" y="454" width="172" height="43"/>
+  <rect name="east-bridge-south" x="1010" y="536" width="99" height="44"/>
+  <rect name="southeast-bridge-left" x="1140" y="614" width="25" height="144"/>
+  <rect name="southeast-bridge-right" x="1239" y="614" width="23" height="144"/>
+  <rect name="gate-west-post" x="1364" y="438" width="26" height="61"/>
+  <rect name="gate-east-post" x="1496" y="438" width="26" height="61"/>
+  <rect name="gate-lower-post" x="1520" y="477" width="24" height="44"/>
+</collision>

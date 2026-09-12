@@ -19,6 +19,7 @@ import java.util.Optional;
 public class RoomRegistry {
     private final EnvironmentVoteResolver voteResolver;
     private final boolean testingMode;
+    private final com.shared.shared.model.world.Environment testEnvironment;
     private final Map<String, MatchRoom> rooms = new LinkedHashMap<>();
     private final Map<String, String> sessionRooms = new LinkedHashMap<>();
     private int nextRoomNumber = 1;
@@ -27,11 +28,17 @@ public class RoomRegistry {
         this(voteResolver, false);
     }
 
+    public RoomRegistry(EnvironmentVoteResolver voteResolver, boolean testingMode) {
+        this(voteResolver, testingMode, com.shared.shared.model.world.Environment.CANYON);
+    }
+
     @Autowired
     public RoomRegistry(EnvironmentVoteResolver voteResolver,
-                        @Value("${game.testing-mode:true}") boolean testingMode) {
+                        @Value("${game.testing-mode:true}") boolean testingMode,
+                        @Value("${game.testing-environment:CANYON}") com.shared.shared.model.world.Environment testEnvironment) {
         this.voteResolver = voteResolver;
         this.testingMode = testingMode;
+        this.testEnvironment = testEnvironment;
     }
 
     public synchronized RoomAssignment assign(Packet selection, String sessionId) {
@@ -85,7 +92,7 @@ public class RoomRegistry {
     }
 
     private MatchRoom createRoom() {
-        MatchRoom room = new MatchRoom("room-" + nextRoomNumber++, voteResolver, testingMode);
+        MatchRoom room = new MatchRoom("room-" + nextRoomNumber++, voteResolver, testingMode, testEnvironment);
         rooms.put(room.getId(), room);
         return room;
     }

@@ -23,18 +23,20 @@ final class TiledTerrain {
     private final String[][] terrain;
     private final boolean[][] ground;
     private final List<List<Rectangle>> blockedRows;
+    private byte[][] lavaTypes;
 
     TiledTerrain(String mapName) {
         try {
-            XmlReader.Element map = read(mapName + ".tmx");
-            int width = map.getIntAttribute("width"), height = map.getIntAttribute("height");
-            if (width != 30 || height != 17 || map.getIntAttribute("tilewidth") != 16
-                || map.getIntAttribute("tileheight") != 16) {
+            XmlReader.Element map = mapName.equals("lava") ? null : read(mapName + ".tmx");
+            int width = map == null ? 30 : map.getIntAttribute("width"), height = map == null ? 17 : map.getIntAttribute("height");
+            if (width != 30 || height != 17 || (map != null && (map.getIntAttribute("tilewidth") != 16
+                || map.getIntAttribute("tileheight") != 16))) {
                 throw new IllegalStateException("Unexpected battlefield dimensions: " + mapName);
             }
             terrain = new String[width][height];
             ground = new boolean[width * TILE_PIXELS][height * TILE_PIXELS];
             blockedRows = new ArrayList<>(height * TILE_PIXELS);
+            if (map != null) {
             boolean[][] mask;
             try (DataInputStream input = new DataInputStream(TiledTerrain.class.getResourceAsStream("/battlefields/terrain-mask.bin"))) {
                 int maskWidth = input.readInt(), maskHeight = input.readInt();
@@ -79,6 +81,16 @@ final class TiledTerrain {
                     }
                 }
             }
+            } else {
+                lavaTypes = new byte[480][272];
+                try (DataInputStream input = new DataInputStream(TiledTerrain.class.getResourceAsStream("/battlefields/lava-mask.bin"))) {
+                    if (input.readInt() != 480 || input.readInt() != 272) throw new IllegalStateException("Invalid lava mask dimensions");
+                    for (int y=271; y>=0; y--) for (int x=0; x<480; x++) {
+                        lavaTypes[x][y] = input.readByte();
+                        ground[x][y] = lavaTypes[x][y] == 0 || lavaTypes[x][y] == 3;
+                    }
+                }
+            }
             // Merge neighboring solid pixels into short horizontal rectangles for fast circle/sweep queries.
             for (int y = 0; y < ground[0].length; y++) {
                 blockedRows.add(new ArrayList<>());
@@ -116,7 +128,9 @@ final class TiledTerrain {
     String at(float x, float y) {
         int px = (int)Math.floor(x * TILE_PIXELS), py = (int)Math.floor(y * TILE_PIXELS);
         if (px < 0 || py < 0 || px >= ground.length || py >= ground[0].length) return "fall";
+        if (lavaTypes != null && lavaTypes[px][py] == 3) return "crack";
         if (ground[px][py]) return "ground";
+        if (lavaTypes != null) return lavaTypes[px][py] == 2 ? "lava" : "blocked";
         return terrain[px / TILE_PIXELS][py / TILE_PIXELS];
     }
 

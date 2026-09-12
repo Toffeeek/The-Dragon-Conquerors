@@ -15,6 +15,22 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TestingModeTest {
     @Test
+    void soloPlayerCanChooseEveryMapWithoutVotes() {
+        for (Environment environment : Environment.values()) {
+            MatchRoom room = new MatchRoom("solo", new EnvironmentVoteResolver(), true, Environment.LAVA);
+            room.getLobby().addPlayer(selection(1), "solo");
+            room.markReady("solo");
+            MatchState state = room.startTestMatch(0, environment);
+            assertEquals(environment, state.getEnvironment());
+            assertEquals(1, state.getPlayers().size());
+            assertFalse(state.isMatchOver());
+            assertTrue(state.isTestingMode());
+            assertThrows(IllegalArgumentException.class, () -> room.startTestMatch(0, Environment.CANYON));
+            assertEquals(environment, room.getMatches().snapshot().getEnvironment());
+        }
+    }
+
+    @Test
     void soloPracticeStartsWithoutVotesAndCanMoveAndRepeatTurns() {
         RoomRegistry registry = new RoomRegistry(new EnvironmentVoteResolver(), true);
         RoomAssignment solo = registry.assign(selection(1), "solo");
@@ -65,11 +81,14 @@ class TestingModeTest {
         room.getLobby().addPlayer(selection(1), "s0");
         assertThrows(IllegalArgumentException.class, () -> room.startTestMatch(0));
         assertThrows(IllegalArgumentException.class, () -> room.startTestMatch(99));
+        assertThrows(IllegalArgumentException.class, () -> room.startTestMatch(0, Environment.LAVA));
+        assertThrows(IllegalArgumentException.class, () -> room.startTestMatch(99, Environment.LAVA));
         assertFalse(room.getMatches().isRunning());
         MatchRoom normal = new MatchRoom("normal", new EnvironmentVoteResolver());
         normal.getLobby().addPlayer(selection(1), "s0");
         normal.markReady("s0");
         assertThrows(IllegalArgumentException.class, () -> normal.startTestMatch(0));
+        assertThrows(IllegalArgumentException.class, () -> normal.startTestMatch(0, Environment.LAVA));
         assertTrue(normal.getLobby().startIfReady().isEmpty());
     }
 
@@ -81,7 +100,7 @@ class TestingModeTest {
         MatchRoom room = first.getRoom();
         room.markReady("one");
         room.markReady("two");
-        room.startTestMatch(first.getPlayer().getId());
+        room.startTestMatch(first.getPlayer().getId(), Environment.LAVA);
         registry.disconnect("two", second.getPlayer().getId());
         assertTrue(room.getMatches().isComplete());
         RematchDecision restart = room.requestRematch(first.getPlayer().getId());
@@ -89,6 +108,7 @@ class TestingModeTest {
         assertEquals(1, restart.getRequiredVotes());
         assertTrue(restart.getState().isTestingMode());
         assertFalse(restart.getState().isMatchOver());
+        assertEquals(Environment.LAVA, restart.getState().getEnvironment());
     }
 
     private Packet selection(int team) {

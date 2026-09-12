@@ -16,7 +16,7 @@ import java.util.Map;
  *   <li>{@link #POISON} — damage over time. Applied by the Wraith's Poison Jab
  *       (50% chance) and by Bog terrain tiles.</li>
  *   <li>{@link #BURN} — damage over time, <b>removed by ice</b>. Applied by the
- *       Mage's Fireball (50% chance) and by Lava environments every turn.</li>
+ *       Mage's Fireball (50% chance) and by stepping on glowing Lava cracks.</li>
  *   <li>{@link #SUB_ZERO} — slows the target, <b>removed by fire</b>. Applied by
  *       the Mage's Ice Attack (50% chance).</li>
  *   <li>{@link #CURSE} — Wraith only. Kills the target after

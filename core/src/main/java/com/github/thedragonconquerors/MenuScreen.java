@@ -19,8 +19,6 @@ import com.badlogic.gdx.utils.Scaling;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.client.client.NetworkClient;
 
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.time.Duration;
 
 /** Main menu with host/join controls connected to Main's existing networking API. */
@@ -151,8 +149,8 @@ public class MenuScreen extends ScreenAdapter {
         });
 
         Label addressLabel = new Label("SERVER ADDRESS", skin, "section");
-        addressField = new TextField("", skin);
-        addressField.setMessageText("Paste host address, e.g. ws://192.168.1.10:8080/ws");
+        addressField = new TextField(Main.DEFAULT_SERVER_URL, skin);
+        addressField.setMessageText("192.168.1.10:8080");
 
         joinButton = new TextButton("JOIN CAMPAIGN", skin, "secondary");
         joinButton.addListener(new ClickListener() {
@@ -276,39 +274,36 @@ public class MenuScreen extends ScreenAdapter {
             throw new IllegalArgumentException("Enter the host address before joining.");
         }
 
-        if (value.regionMatches(true, 0, "Join:", 0, "Join:".length())) {
-            value = value.substring("Join:".length()).trim();
-        }
-
-        if (value.startsWith("http://")) {
-            value = "ws://" + value.substring("http://".length());
-        } else if (value.startsWith("https://")) {
-            value = "wss://" + value.substring("https://".length());
-        }
-
         if (!value.startsWith("ws://") && !value.startsWith("wss://")) {
             value = "ws://" + value;
         }
 
-        try {
-            URI uri = new URI(value);
-            String scheme = uri.getScheme();
-            String host = uri.getHost();
-            if (host == null || host.isBlank()) {
-                throw new IllegalArgumentException("The server address needs a hostname, for example ws://192.168.1.10:8080/ws.");
-            }
+        int authorityStart = value.indexOf("://") + 3;
+        int pathStart = value.indexOf('/', authorityStart);
+        String authority = pathStart < 0
+            ? value.substring(authorityStart)
+            : value.substring(authorityStart, pathStart);
 
-            int port = uri.getPort() < 0 ? Main.SERVER_PORT : uri.getPort();
-            String path = uri.getPath();
-            if (path == null || path.isEmpty() || "/".equals(path)) {
-                path = "/ws";
-            }
-
-            return new URI(scheme, null, host, port, path,
-                uri.getQuery(), uri.getFragment()).toString();
-        } catch (URISyntaxException exception) {
-            throw new IllegalArgumentException("The server address is not valid. Use something like ws://192.168.1.10:8080/ws.");
+        if (authority.isEmpty()) {
+            throw new IllegalArgumentException("The server address is not valid.");
         }
+
+        // Add the project's default port for convenient inputs such as localhost
+        // or 192.168.1.10. Bracketed IPv6 and explicit ports are left unchanged.
+        if (!authority.startsWith("[") && authority.indexOf(':') < 0) {
+            String suffix = pathStart < 0 ? "" : value.substring(pathStart);
+            value = value.substring(0, authorityStart)
+                + authority + ":" + Main.SERVER_PORT + suffix;
+            pathStart = value.indexOf('/', authorityStart);
+        }
+
+        if (pathStart < 0) {
+            value += "/ws";
+        } else if (value.substring(pathStart).equals("/")) {
+            value += "ws";
+        }
+
+        return value;
     }
 
     private void postFailure(String prefix, Exception exception) {

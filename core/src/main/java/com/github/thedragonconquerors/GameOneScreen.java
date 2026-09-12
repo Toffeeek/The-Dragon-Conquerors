@@ -65,6 +65,7 @@ public class GameOneScreen extends ScreenAdapter {
     private final BattlefieldDefinition battlefield;
 
     private OrthogonalTiledMapRenderer mapRenderer;
+    private com.badlogic.gdx.graphics.Texture battlefieldImage;
     private BattlefieldOverlayRenderer battlefieldOverlay;
     private MovementSystem movementSystem;
     private NavGrid navGrid;
@@ -116,9 +117,15 @@ public class GameOneScreen extends ScreenAdapter {
         spawnLocalPlayer(username, spawn, chosenBuild);
         availableActions = AbilityType.forClass(chosenBuild.getCharacterClass());
 
-        TiledMap map = assetService.load(
-            com.github.thedragonconquerors.assets.MapAssets.forEnvironment(environment));
-        mapRenderer = new OrthogonalTiledMapRenderer(map, Main.UNIT_SCALE, batch);
+        TiledMap map = null;
+        if (environment == Environment.LAVA) {
+            battlefieldImage = assetService.load(com.github.thedragonconquerors.assets.BattlefieldImageAssets.LAVA);
+            battlefieldImage.setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Nearest,
+                com.badlogic.gdx.graphics.Texture.TextureFilter.Nearest);
+        } else {
+            map = assetService.load(com.github.thedragonconquerors.assets.MapAssets.forEnvironment(environment));
+            mapRenderer = new OrthogonalTiledMapRenderer(map, Main.UNIT_SCALE, batch);
+        }
         navGrid = new NavGrid(map, Main.UNIT_SCALE, Main.WORLD_WIDTH, Main.WORLD_HEIGHT,
             battlefield);
         movementSystem.setNavGrid(navGrid);
@@ -177,8 +184,16 @@ public class GameOneScreen extends ScreenAdapter {
         ScreenUtils.clear(Color.BLACK);
         viewport.apply();
         batch.setColor(Color.WHITE);
-        mapRenderer.setView(camera);
-        mapRenderer.render();
+        if (battlefieldImage != null) {
+            batch.setProjectionMatrix(camera.combined);
+            batch.setColor(Color.WHITE);
+            batch.begin();
+            batch.draw(battlefieldImage, 0f, 0f, battlefield.getWidth(), battlefield.getHeight());
+            batch.end();
+        } else {
+            mapRenderer.setView(camera);
+            mapRenderer.render();
+        }
         battlefieldOverlay.render(camera.combined);
 
         playerRenderer.renderLocal(localPlayer, camera.combined, navGrid, delta);

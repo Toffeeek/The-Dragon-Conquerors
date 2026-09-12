@@ -1,0 +1,98 @@
+// Build collision from the same source image the client displays. No runtime image decoder on server.
+def lavaMaskDir = layout.buildDirectory.dir('generated/lavaMasks')
+tasks.register('generateLavaTerrain') {
+  inputs.files(rootProject.file('assets/maps-new/lava-map.png'), rootProject.file('assets/maps-new/lava-collision.xml'))
+  outputs.dir(lavaMaskDir)
+  doLast {
+    def image = javax.imageio.ImageIO.read(rootProject.file('assets/maps-new/lava-map.png'))
+    def factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+    factory.setFeature('http://apache.org/xml/features/disallow-doctype-decl', true)
+    def xml = factory.newDocumentBuilder().parse(rootProject.file('assets/maps-new/lava-collision.xml'))
+    int width = image.width, height = image.height
+    boolean[] orange = new boolean[width * height]
+    boolean[] lava = new boolean[width * height]
+    for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) {
+      int rgb = image.getRGB(x,y), r = (rgb >>> 16) & 255, g = (rgb >>> 8) & 255, b = rgb & 255
+      orange[y * width + x] = r > 110 && r > g * 1.35 && r > b * 1.8
+    }
+    // Only the border-connected molten sea is lethal, not torches or cracks on solid platforms.
+    def queue = new java.util.ArrayDeque<Integer>()
+    def seeds=xml.getElementsByTagName('lava-seed')
+    for (int i=0; i<seeds.length; i++) {
+      int x=seeds.item(i).getAttribute('x').toInteger(), y=seeds.item(i).getAttribute('y').toInteger()
+      int id=y*width+x
+      if (x<0 || y<0 || x>=width || y>=height || !orange[id]) throw new GradleException('Invalid lava seed')
+      lava[id]=true; queue.add(id)
+    }
+    for (int id = 0; id < orange.length; id++) {
+      int x = id % width, y = (int)(id / width)
+      if ((x == 0 || y == 0 || x == width-1 || y == height-1) && orange[id]) { lava[id] = true; queue.add(id) }
+    }
+    while (!queue.isEmpty()) {
+      int id = queue.removeFirst(), x = id % width, y = (int)(id / width)
+      int[] neighbors = [x > 0 ? id-1 : -1, x+1 < width ? id+1 : -1, y > 0 ? id-width : -1, y+1 < height ? id+width : -1]
+      for (int next : neighbors) if (next >= 0 && orange[next] && !lava[next]) { lava[next]=true; queue.add(next) }
+    }
+    if (xml.documentElement.getAttribute('width').toInteger() != width || xml.documentElement.getAttribute('height').toInteger() != height) {
+      throw new GradleException('Lava collision coordinates must match the source image')
+    }
+    def props = []
+    def polygons = xml.getElementsByTagName('polygon')
+    for (int i=0; i<polygons.length; i++) {
+      def path = new java.awt.geom.Path2D.Double()
+      def pairs = polygons.item(i).getAttribute('points').split(' ')
+      pairs.eachWithIndex { pair, index ->
+        def xy = pair.split(',')
+        if (index == 0) path.moveTo(xy[0].toDouble(),xy[1].toDouble()) else path.lineTo(xy[0].toDouble(),xy[1].toDouble())
+      }
+      path.closePath(); props.add(path)
+    }
+    def rects = xml.getElementsByTagName('rect')
+    for (int i=0; i<rects.length; i++) {
+      def rect = rects.item(i)
+      props.add(new java.awt.geom.Rectangle2D.Double(rect.getAttribute('x').toDouble(),rect.getAttribute('y').toDouble(),
+        rect.getAttribute('width').toDouble(),rect.getAttribute('height').toDouble()))
+    }
+    int outWidth=480, outHeight=272
+    // A small contact margin keeps hairline cracks detectable by the player's feet.
+    boolean[] burning = new boolean[width * height]
+    def cracks = xml.getElementsByTagName('crack')
+    for (int i=0; i<cracks.length; i++) {
+      def crack = cracks.item(i)
+      int left=crack.getAttribute('x').toInteger(), top=crack.getAttribute('y').toInteger()
+      int right=left+crack.getAttribute('width').toInteger(), bottom=top+crack.getAttribute('height').toInteger()
+      for (int y=top; y<bottom; y++) for (int x=left; x<right; x++) {
+        if (!orange[y*width+x] || lava[y*width+x]) continue
+        for (int dy=-6; dy<=6; dy++) for (int dx=-6; dx<=6; dx++) {
+          int px=x+dx, py=y+dy
+          if (dx*dx+dy*dy<=36 && px>=0 && py>=0 && px<width && py<height) burning[py*width+px]=true
+        }
+      }
+    }
+    def preview = new java.awt.image.BufferedImage(width,height,java.awt.image.BufferedImage.TYPE_INT_RGB)
+    def graphics=preview.createGraphics(); graphics.drawImage(image,0,0,null)
+    def output=lavaMaskDir.get().file('battlefields/lava-mask.bin').asFile
+    output.parentFile.mkdirs()
+    output.withDataOutputStream { data ->
+      data.writeInt(outWidth); data.writeInt(outHeight)
+      for (int y=0; y<outHeight; y++) for (int x=0; x<outWidth; x++) {
+        double sx=(x+0.5)*width/outWidth, sy=(y+0.5)*height/outHeight
+        boolean hot=lava[(int)sy*width+(int)sx]
+        boolean solid=props.any { it.contains(sx,sy) }
+        boolean burn=burning[(int)sy*width+(int)sx]
+        data.writeByte(hot ? 2 : solid ? 1 : burn ? 3 : 0)
+        if (hot || solid || burn) {
+          graphics.setColor(hot ? new java.awt.Color(255,0,0,100) : solid ? new java.awt.Color(40,120,255,140) : new java.awt.Color(255,220,0,150))
+          graphics.fillRect((int)(x*width/outWidth),(int)(y*height/outHeight),(int)Math.ceil(width/(double)outWidth),(int)Math.ceil(height/(double)outHeight))
+        }
+      }
+    }
+    graphics.dispose()
+    def report=layout.buildDirectory.file('reports/lava-collision.png').get().asFile
+    report.parentFile.mkdirs(); javax.imageio.ImageIO.write(preview,'png',report)
+  }
+}
+processResources {
+  dependsOn tasks.named('generateLavaTerrain')
+  from(lavaMaskDir)
+}

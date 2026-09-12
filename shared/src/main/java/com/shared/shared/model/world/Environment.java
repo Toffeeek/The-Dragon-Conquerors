@@ -10,8 +10,8 @@ import com.shared.shared.model.effect.StatusEffectType;
  * <ul>
  *   <li>{@link #BOG} — poison tiles. A character standing on a hazard tile at
  *       the start of its turn is poisoned. Localised: position matters.</li>
- *   <li>{@link #LAVA} — <b>every</b> player takes burn damage each turn,
- *       regardless of position. Global: a race against attrition.</li>
+ *   <li>{@link #LAVA} — stepping on glowing cracks applies a two-turn burn;
+ *       forced movement into molten lava kills instantly.</li>
  *   <li>{@link #CANYON} — the neutral map. No periodic damage, but falling off
  *       an edge is instant death.</li>
  * </ul>
@@ -43,11 +43,11 @@ public enum Environment {
         false),
 
     LAVA("Lava",
-        "Volcanic flats. The air itself scorches; nobody escapes the heat.",
+        "Volcanic flats. Glowing cracks burn for two turns; molten lava is lethal.",
         "lava.tmx",
         null,
         StatusEffectType.BURN,
-        HazardScope.EVERY_PLAYER,
+        HazardScope.CONTACT_BASED,
         false),
 
     CANYON("Canyon",
@@ -66,6 +66,9 @@ public enum Environment {
 
         /** Only characters standing on a hazard tile are affected. */
         TILE_BASED,
+
+        /** Applied by movement contact, not reapplied at turn start. */
+        CONTACT_BASED,
 
         /** Every character on the map is affected, wherever they stand. */
         EVERY_PLAYER
@@ -132,7 +135,7 @@ public enum Environment {
         return fallingIsLethal;
     }
 
-    /** True when the hazard applies to everyone every turn (Lava). */
+    /** True when the hazard applies to everyone every turn. */
     public boolean affectsEveryone() {
         return hazardScope == HazardScope.EVERY_PLAYER;
     }
@@ -144,6 +147,7 @@ public enum Environment {
 
     /** One-line hazard summary for the voting screen. */
     public String hazardSummary() {
+        if (this == LAVA) return "Cracks: Burn 8 HP x 2 turns; lava: instant death";
         switch (hazardScope) {
             case EVERY_PLAYER:
                 return "Every player suffers " + hazardEffect.getDisplayName() + " each turn";
