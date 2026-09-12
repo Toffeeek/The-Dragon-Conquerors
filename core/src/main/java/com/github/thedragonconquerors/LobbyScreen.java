@@ -107,7 +107,7 @@ public class LobbyScreen extends ScreenAdapter {
 
         root.add(createTopBar()).growX().height(72f).row();
         Table content = new Table();
-        content.add(createSessionPanel()).width(330f).growY();
+        content.add(createSessionPanel()).width(340f).growY();
         selectionHost = new Table();
         content.add(selectionHost).expand().fill().padLeft(24f);
         root.add(content).grow().padTop(22f).row();
@@ -137,9 +137,9 @@ public class LobbyScreen extends ScreenAdapter {
             }
         });
 
-        bar.add(leaveButton).width(150f).height(42f).left();
+        bar.add(leaveButton).width(170f).height(42f).left();
         bar.add(title).expandX().center();
-        bar.add(copyButton).width(160f).height(42f).right();
+        bar.add(copyButton).width(180f).height(42f).right();
         return bar;
     }
 
@@ -306,7 +306,7 @@ public class LobbyScreen extends ScreenAdapter {
                 }
             });
             group.add(button);
-            grid.add(button).width(218f).height(78f).pad(5f);
+            grid.add(button).width(224f).height(84f).pad(5f);
             if ((index + 1) % 3 == 0) grid.row();
         }
         panel.add(grid).left().row();
@@ -461,11 +461,14 @@ public class LobbyScreen extends ScreenAdapter {
 
     private Table createClassTierTable(CharacterClass characterClass) {
         Table table = new Table();
+        int index = 0;
         for (StatType stat : StatType.values()) {
-            table.add(new Label(stat.getDisplayName(), skin, "caption")).width(68f).left();
+            table.add(new Label(stat.getDisplayName(), skin, "caption")).width(92f).left();
             Label value = new Label(Integer.toString(characterClass.getTier(stat)), skin, "default");
             value.setColor(FantasyUiTheme.SUCCESS);
-            table.add(value).width(32f).left();
+            table.add(value).width(44f).left();
+            index++;
+            if (index % 3 == 0) table.row();
         }
         return table;
     }
