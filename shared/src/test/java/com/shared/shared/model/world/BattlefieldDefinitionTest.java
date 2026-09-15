@@ -22,7 +22,7 @@ class BattlefieldDefinitionTest {
     @Test
     void bogPoisonZonesRemainWalkable() {
         BattlefieldDefinition bog = BattlefieldDefinition.forEnvironment(Environment.BOG);
-        Vector2 pool = new Vector2(8f, 3f);
+        Vector2 pool = BattlefieldArtwork.MAP3.worldPoint(1250, 310);
         assertTrue(bog.isHazard(pool));
         assertTrue(bog.isWalkable(pool));
     }
@@ -30,12 +30,12 @@ class BattlefieldDefinitionTest {
     @Test
     void canyonChasmIsLethalAndBlocksPaths() {
         BattlefieldDefinition canyon = BattlefieldDefinition.forEnvironment(Environment.CANYON);
-        Vector2 chasm = new Vector2(13f, 4f);
+        Vector2 chasm = BattlefieldArtwork.MAP1.worldPoint(410, 500);
         assertTrue(canyon.isLethalFall(chasm));
         assertFalse(canyon.isWalkable(chasm));
         assertTrue(canyon.pathCrossesLethalFall(
-            new Vector2(8f, 4f), new Vector2(17f, 4f)));
+            BattlefieldArtwork.MAP1.worldPoint(280, 500), BattlefieldArtwork.MAP1.worldPoint(540, 500)));
         assertFalse(canyon.pathIsWalkable(
-            new Vector2(8f, 4f), new Vector2(17f, 4f)));
+            BattlefieldArtwork.MAP1.worldPoint(280, 500), BattlefieldArtwork.MAP1.worldPoint(540, 500)));
     }
 }

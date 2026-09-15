@@ -87,7 +87,7 @@ class RematchFlowTest {
 
         assertTrue(room.getMatches().handle(0, Packet.builder()
             .ID(0).action(Action.USE_ABILITY).ability(AbilityType.TELEPORT)
-            .targetPosition(new com.badlogic.gdx.math.Vector2(8f, 3f)).build()).isAccepted());
+            .targetPosition(com.shared.shared.model.world.BattlefieldArtwork.MAP3.worldPoint(1200, 510)).build()).isAccepted());
         for (int turn = 0; turn < 4; turn++) {
             int active = room.getMatches().snapshot().getActivePlayerId();
             assertTrue(room.getMatches().handle(active,

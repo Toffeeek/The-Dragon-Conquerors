@@ -32,6 +32,10 @@ public final class MatchRoom {
     public boolean isTestingMode() { return testingMode; }
 
     public synchronized MatchState startTestMatch(int playerId) {
+        return startTestMatch(playerId, null);
+    }
+
+    public synchronized MatchState startTestMatch(int playerId, Environment environment) {
         if (!testingMode) throw new IllegalArgumentException("Testing mode is disabled.");
         if (!lobby.contains(playerId)) throw new IllegalArgumentException("Join before starting a test.");
         if (matches.isRunning()) throw new IllegalArgumentException("A match is already in progress.");
@@ -39,7 +43,7 @@ public final class MatchRoom {
             throw new IllegalArgumentException("A player is still joining. Try Start Test again shortly.");
         }
         lobby.startTesting();
-        return matches.start(lobby.players(), Environment.CANYON, true);
+        return matches.start(lobby.players(), environment == null ? Environment.CANYON : environment, true);
     }
 
     public String getId() {

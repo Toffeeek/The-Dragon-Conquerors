@@ -18,10 +18,7 @@ public final class BattlefieldDefinition {
         new EnumMap<>(Environment.class);
 
     static {
-        DEFINITIONS.put(Environment.BOG, new BattlefieldDefinition(Environment.BOG, List.of(
-            zone(BattlefieldZoneType.HAZARD, 7f, 2f, 5f, 4f),
-            zone(BattlefieldZoneType.HAZARD, 12.5f, 7f, 5f, 3f),
-            zone(BattlefieldZoneType.HAZARD, 19f, 11f, 4f, 4f))));
+        DEFINITIONS.put(Environment.BOG, new BattlefieldDefinition(Environment.BOG, List.of()));
 
         DEFINITIONS.put(Environment.LAVA, new BattlefieldDefinition(Environment.LAVA, List.of()));
         DEFINITIONS.put(Environment.CANYON, new BattlefieldDefinition(Environment.CANYON, List.of()));
@@ -34,12 +31,17 @@ public final class BattlefieldDefinition {
     private final TiledTerrain terrain;
 
     private BattlefieldDefinition(Environment environment, List<BattlefieldZone> zones) {
+        this(environment, zones, true);
+    }
+
+    /** Package-local legacy TMX fixture support; live matches always use image artwork. */
+    BattlefieldDefinition(Environment environment, List<BattlefieldZone> zones, boolean useImageArtwork) {
         this.environment = environment;
         this.width = DEFAULT_WIDTH;
         this.height = DEFAULT_HEIGHT;
         this.zones = Collections.unmodifiableList(zones);
-        this.terrain = new TiledTerrain(environment.name().toLowerCase(java.util.Locale.ROOT));
-        validateSpawns();
+        this.terrain = new TiledTerrain(environment.name().toLowerCase(java.util.Locale.ROOT), useImageArtwork);
+        if (useImageArtwork) validateSpawns();
     }
 
     public static BattlefieldDefinition forEnvironment(Environment environment) {
@@ -53,8 +55,17 @@ public final class BattlefieldDefinition {
     public List<BattlefieldZone> getZones() { return zones; }
 
     public Vector2 spawnFor(int teamIndex, int teamSlot) {
-        if (teamIndex == 1) return teamSlot <= 0 ? new Vector2(2f, 5f) : new Vector2(4.5f, 12.5f);
-        return new Vector2(28f, teamSlot <= 0 ? 9f : 12f);
+        if (environment == Environment.CANYON) {
+            return BattlefieldArtwork.MAP1.worldPoint(teamIndex == 1 ? 245 : 1490, teamSlot <= 0 ? 410 : 550);
+        }
+        if (environment == Environment.BOG) {
+            return teamIndex == 1
+                ? BattlefieldArtwork.MAP3.worldPoint(teamSlot <= 0 ? 180 : 520, teamSlot <= 0 ? 500 : 270)
+                : BattlefieldArtwork.MAP3.worldPoint(teamSlot <= 0 ? 1320 : 1250, teamSlot <= 0 ? 570 : 310);
+        }
+        return teamIndex == 1
+            ? BattlefieldArtwork.MAP2.worldPoint(teamSlot <= 0 ? 210 : 420, teamSlot <= 0 ? 230 : 735)
+            : BattlefieldArtwork.MAP2.worldPoint(teamSlot <= 0 ? 1430 : 1190, teamSlot <= 0 ? 560 : 815);
     }
 
     public boolean isInside(Vector2 point) {
@@ -63,7 +74,20 @@ public final class BattlefieldDefinition {
     }
 
     public boolean isHazard(Vector2 point) {
-        return contains(BattlefieldZoneType.HAZARD, point);
+        return isInside(point) && ("poison".equals(terrain.at(point.x, point.y))
+            || "burn".equals(terrain.at(point.x, point.y)) || contains(BattlefieldZoneType.HAZARD, point));
+    }
+
+    /** Sample the actual traversed segment so thin cracks cannot be skipped between waypoints. */
+    public boolean pathCrossesHazard(Vector2 start, Vector2 end) {
+        if (!isInside(start) || !isInside(end)) return false;
+        int steps = Math.max(1, (int) Math.ceil(start.dst(end) / TRACE_STEP));
+        Vector2 sample = new Vector2();
+        for (int step = 0; step <= steps; step++) {
+            sample.set(start).lerp(end, step / (float) steps);
+            if (isHazard(sample)) return true;
+        }
+        return false;
     }
 
     public boolean isLethalFall(Vector2 point) {
@@ -108,6 +132,7 @@ public final class BattlefieldDefinition {
         for (int step = 0; step <= steps; step++) {
             sample.set(start).lerp(end, step / (float) steps);
             if (mode == TraceMode.WALKABLE && !isWalkable(sample)) return false;
+            if (mode == TraceMode.LETHAL && isInside(sample) && "blocked".equals(terrain.at(sample.x, sample.y))) return false;
             if (mode == TraceMode.LETHAL && isLethalFall(sample)) return true;
         }
         return mode == TraceMode.WALKABLE;

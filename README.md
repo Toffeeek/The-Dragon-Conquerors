@@ -40,26 +40,33 @@ is documented in [`docs/SPRITE_SHEETS.md`](docs/SPRITE_SHEETS.md).
 
 Combat controls:
 
-- Press `1`-`4` to choose an action.
+- Click **MOVE** or **ACTION** at the start of your turn; world clicks do nothing until a mode is selected.
+- **ACTION** opens a compact mouse-clickable ability list (no number-key shortcuts).
 - Self-targeted actions execute immediately.
 - Enemy-targeted actions show a persistent selection prompt.
 - Left-click a highlighted player to use the action on that player.
 - Green targets are in range; red targets are outside the action's range.
-- Press `Esc` to cancel target selection.
+- Click **CANCEL** or press `Esc` to cancel targeting or movement selection.
 - While target selection is active, clicks are consumed by targeting and do not move the player.
 - Each turn grants **1 action point (AP)** plus your class/race movement allowance.
 - Every accepted ability spends 1 AP, including abilities with no mana cost; rejected actions spend nothing.
 - Movement and actions can be used in either order. When both reach zero, the server advances the turn automatically.
-- Press `E` to end a turn early. In solo testing, an automatic turn end refreshes your next turn's resources.
-- Click a reachable ground destination to move. Longer routes stop at your movement limit;
+- Click **END TURN** to end a turn early. In solo testing, an automatic turn end refreshes your next turn's resources.
+- In **MOVE** mode, click the soft-blue reachable area to move. Longer routes stop at your movement limit;
   water, cliff terrain, map edges, and living players block movement.
+- The map fills the game window with compact corner overlays, scaled 40% smaller than the original battle HUD.
+- HP/mana/stamina sit at the top left; the top-centre banner names the active player, also marked with a gold ring.
+- The bottom-right battle log retains the latest 100 server-confirmed results. Scroll to read older entries.
+- Opening abilities does not resize the map. There are no reserved HUD strips.
+- HUD clicks never trigger movement; movement route lines and in-game server/map labels are hidden.
 
 ## Temporary testing flow (enabled by default)
 
 Map voting and the four-player minimum are temporarily bypassed:
 
 1. Choose a team, class, and race, then click **JOIN GAME**.
-2. Click **START TEST** to enter Canyon immediately with 1-4 connected players.
+2. Choose **Map 1 - Canyon**, **Lava**, or **Map 3 - Bog**, then click **START TEST** with 1-4 connected players.
+   Map 1 is selected initially. The player pressing Start Test chooses the map; no votes are needed.
    Friends must join before starting; the two-player-per-team limit still applies.
 3. Move, use available abilities, and end turns as usual. Solo or single-team tests
    stay playable instead of immediately declaring a winner. Tests that start with
@@ -78,7 +85,7 @@ After connecting, each client completes three server-backed lobby steps:
 
 1. Choose a team and class while inspecting the class's base design tiers and abilities.
 2. Choose a race while previewing the fully boosted engine stats and synergy budget.
-3. Vote for Bog, Lava, or Canyon. Live totals are broadcast to every lobby client.
+3. Vote for Map 1 (Canyon), Lava, or Map 3 (Bog), shown in that order. Live totals are broadcast to every lobby client.
 
 Each matchmaking room allows four players, enforces two players per team, and starts its
 match only after all four players have voted. A strict majority wins; a tie is randomly
@@ -103,10 +110,29 @@ hazards, lethal falls, and path validation. Both the Spring Boot server and libG
 that geometry, so the navigation preview agrees with authoritative command validation.
 
 - Bog poison pools are walkable hazards that apply poison when a combatant begins a turn in one.
-- Lava applies the environment's global burn effect at turn start.
+- Lava pools block walking and teleport landing; being pushed into lava is instant death.
+- Glowing lava-map cracks remain walkable and apply Burn for two own turns (8 HP per turn).
+  Crossing a crack or teleporting onto one applies it; staying on one refreshes it. Safe stone never applies burn.
 - Canyon chasms block ordinary movement; a forced push across a lethal edge defeats the target.
 
-Terrain collision is loaded from the same TMX tile data used for the map artwork.
+Map 1 replaces Canyon's old artwork and Map 3 is the final map, using Bog's rules.
+The original SVGs and their unchanged embedded PNGs are in `assets/maps-new/map1.*`,
+`assets/maps-new/map2.*` (Lava), and `assets/maps-new/map3.*`. The original source files
+are retained. These maps are selections, not automatic campaign progression.
+
+Their `map1-collision.xml`, `map2-collision.xml`, and `map3-collision.xml` files describe ground, bridges,
+stairs, solid props and hazardous regions in source-image coordinates. The build
+compiles shared collision masks through `shared/image-maps.gradle`. Map 3 is centered
+at its original aspect ratio, with the same positioning used by server collision.
+Water, cliff faces and props block movement; bridges, staircases and paths connect
+the main playable regions. Bridge railings stop knockback before water. Canyon's
+open falls remain lethal; Bog's violet districts apply poison at turn start.
+Lava's stone causeways connect the main islands; its detached island needs teleport.
+Its narrow lava moat is lethal, while glowing fissures use passable burn strips.
+Collision previews are generated at `shared/build/reports/map1-collision.png`,
+`map2-collision.png`, and `map3-collision.png`; these debug overlays are not displayed in-game.
+
+The legacy TMX terrain collision is loaded from the same tile data used for its artwork.
 `assets/maps-new/tileset.tsx` marks terrain types and declares the walkable grass palette.
 The build generates a pixel collision mask directly from `tileset.png`; mixed shoreline tiles
 are no longer blocked as full squares. Water and cliff pixels block a small circular foot collider
@@ -115,7 +141,7 @@ apply the same transform to artwork and collision. Navigation uses a finer 0.125
 The shared JAR packages the generated mask for both server and client; rebuild and restart both
 after editing maps or the tileset. Update `walkableColors` when introducing a new ground palette.
 There are no synthetic black rectangles or red collision outlines over Canyon.
-Bog's poison overlay only shades walkable ground. These maps still share placeholder artwork.
+The new images are displayed without placeholder rectangles or collision-debug overlays.
 
 ## Authoritative combat
 

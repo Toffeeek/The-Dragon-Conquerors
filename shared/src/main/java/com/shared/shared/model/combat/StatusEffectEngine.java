@@ -53,6 +53,7 @@ public class StatusEffectEngine {
      * matters because Curse compares this field against a real ID.</p>
      */
     public static final int ENVIRONMENT_SOURCE_ID = -2;
+    public static final int LAVA_BURN_TURNS = 2;
 
     /**
      * When true, an effect that cleanses its opposite is spent doing so and is not
@@ -238,7 +239,8 @@ public class StatusEffectEngine {
 
         // 1. Environment hazards land before anything is resolved.
         StatusEffectType hazard = hazardEffectFor(environment, standingOnHazard);
-        if (hazard != null) apply(combatant, hazard, ENVIRONMENT_SOURCE_ID);
+        if (hazard != null) apply(combatant, hazard, ENVIRONMENT_SOURCE_ID,
+            environment == Environment.LAVA ? LAVA_BURN_TURNS : hazard.getDefaultDuration());
 
         // 2. Damage over time.
         int damage = 0;
@@ -289,8 +291,8 @@ public class StatusEffectEngine {
     /**
      * The effect an environment inflicts on a combatant this turn, or {@code null}.
      *
-     * <p>Lava affects everyone wherever they stand; Bog only affects a combatant on
-     * a hazard tile; Canyon inflicts nothing, since its danger is falling off,
+     * <p>Lava and Bog only affect a combatant on a hazard tile;
+     * Canyon inflicts nothing, since its danger is falling off,
      * which is a movement concern rather than a turn-start one.</p>
      */
     private StatusEffectType hazardEffectFor(Environment environment, boolean standingOnHazard) {

@@ -19,7 +19,7 @@ class TurnResourceTest {
         assertEquals(0, player(match, 0).getActionPoints());
         assertEquals(0, match.getActivePlayerId(), "Movement is still available");
         assertFalse(match.useAbility(0, AbilityType.ACCURACY_BOOST, 0, null).isAccepted());
-        assertTrue(match.move(0, new Vector2(8.5f, 5f)).isAccepted());
+        assertTrue(match.move(0, new Vector2(15f, 8f)).isAccepted());
         assertEquals(0f, player(match, 0).getRemainingMovement(), 0.001f);
         assertEquals(1, match.getActivePlayerId());
         assertTrue(match.snapshot().getMessage().contains("automatically"));
@@ -30,7 +30,7 @@ class TurnResourceTest {
 
     @Test void movementThenActionAutomaticallyEndsTurn() {
         AuthoritativeMatch match = match(false);
-        assertTrue(match.move(0, new Vector2(8.5f, 5f)).isAccepted());
+        assertTrue(match.move(0, new Vector2(15f, 8f)).isAccepted());
         assertEquals(0, match.getActivePlayerId(), "The action point is still available");
         assertEquals(1, player(match, 0).getActionPoints());
         assertFalse(match.move(0, new Vector2(2f, 5f)).isAccepted());
@@ -41,7 +41,7 @@ class TurnResourceTest {
     @Test void soloAutoEndRefreshesResourcesWithoutEndingPractice() {
         AuthoritativeMatch match = match(true);
         match.useAbility(0, AbilityType.ACCURACY_BOOST, 0, null);
-        match.move(0, new Vector2(8.5f, 5f));
+        match.move(0, new Vector2(15f, 8f));
         assertEquals(0, match.getActivePlayerId());
         assertFalse(match.snapshot().isMatchOver());
         assertTrue(match.snapshot().getRoundNumber() > 1);
@@ -54,7 +54,7 @@ class TurnResourceTest {
         AuthoritativeMatch match = match(false);
         float movement = player(match, 0).getRemainingMovement();
         assertFalse(match.useAbility(0, AbilityType.FIREBALL, 1, null).isAccepted());
-        assertFalse(match.move(0, new Vector2(22.5f, 9.5f)).isAccepted());
+        assertFalse(match.move(0, new Vector2(1f, 1f)).isAccepted());
         assertEquals(1, player(match, 0).getActionPoints());
         assertEquals(movement, player(match, 0).getRemainingMovement());
         assertEquals(0, match.getActivePlayerId());

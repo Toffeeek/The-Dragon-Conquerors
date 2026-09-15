@@ -11,10 +11,12 @@ import com.badlogic.gdx.scenes.scene2d.ui.ButtonGroup;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.Scaling;
@@ -106,10 +108,19 @@ public class LobbyScreen extends ScreenAdapter {
 
         root.add(createTopBar()).growX().height(72f).row();
         Table content = new Table();
-        content.add(createSessionPanel()).width(330f).growY();
+        content.add(createSessionPanel()).width(340f).growY();
         selectionHost = new Table();
         content.add(selectionHost).expand().fill().padLeft(24f);
-        root.add(content).grow().padTop(22f).row();
+        // Keep navigation visible even when larger fonts or wrapped status text
+        // make the selection content taller than the available window space.
+        ScrollPane.ScrollPaneStyle scrollStyle = new ScrollPane.ScrollPaneStyle();
+        scrollStyle.vScroll = ((TextureRegionDrawable) theme.divider()).tint(FantasyUiTheme.GOLD_DIM);
+        scrollStyle.vScrollKnob = theme.divider();
+        ScrollPane contentScroll = new ScrollPane(content, scrollStyle);
+        contentScroll.setScrollingDisabled(true, false);
+        contentScroll.setOverscroll(false, false);
+        contentScroll.setFadeScrollBars(false);
+        root.add(contentScroll).grow().minHeight(0f).padTop(22f).row();
         root.add(createBottomBar()).growX().height(72f).padTop(18f);
     }
 
@@ -136,16 +147,16 @@ public class LobbyScreen extends ScreenAdapter {
             }
         });
 
-        bar.add(leaveButton).width(150f).height(42f).left();
+        bar.add(leaveButton).width(170f).height(42f).left();
         bar.add(title).expandX().center();
-        bar.add(copyButton).width(160f).height(42f).right();
+        bar.add(copyButton).width(180f).height(42f).right();
         return bar;
     }
 
     private Table createSessionPanel() {
         Table panel = new Table();
         panel.setBackground(theme.panel());
-        panel.pad(24f);
+        panel.pad(18f);
         panel.top().left();
 
         Label heading = new Label("SESSION", skin, "heading");
@@ -172,13 +183,13 @@ public class LobbyScreen extends ScreenAdapter {
         crimsonTeamButton.addListener(teamListener(2));
 
         Table teams = new Table();
-        teams.defaults().width(270f).height(44f).padBottom(8f);
+        teams.defaults().width(270f).height(40f).padBottom(6f);
         teams.add(azureTeamButton).row();
         teams.add(crimsonTeamButton).row();
 
         Table playerCard = new Table();
         playerCard.setBackground(theme.inset());
-        playerCard.pad(14f);
+        playerCard.pad(12f);
         selectionSummaryLabel = new Label("", skin, "default");
         selectionSummaryLabel.setWrap(true);
         playerCard.add(new Label("YOUR BUILD", skin, "section")).left().row();
@@ -188,15 +199,15 @@ public class LobbyScreen extends ScreenAdapter {
         lobbyStatusLabel.setWrap(true);
 
         panel.add(heading).left().row();
-        panel.add(connected).left().padTop(7f).row();
+        panel.add(connected).left().padTop(5f).row();
         panel.add(address).width(270f).left().padTop(10f).row();
-        panel.add(copyStatusLabel).width(270f).left().padTop(7f).row();
-        panel.add(nameHeading).left().padTop(18f).row();
-        panel.add(usernameField).width(270f).height(42f).padTop(7f).row();
-        panel.add(teamHeading).left().padTop(20f).padBottom(8f).row();
+        panel.add(copyStatusLabel).width(270f).left().padTop(5f).row();
+        panel.add(nameHeading).left().padTop(12f).row();
+        panel.add(usernameField).width(270f).height(42f).padTop(5f).row();
+        panel.add(teamHeading).left().padTop(12f).padBottom(8f).row();
         panel.add(teams).left().row();
-        panel.add(playerCard).width(270f).left().padTop(14f).row();
-        panel.add(lobbyStatusLabel).width(270f).left().padTop(12f).row();
+        panel.add(playerCard).width(270f).left().padTop(8f).row();
+        panel.add(lobbyStatusLabel).width(270f).left().padTop(8f).row();
         return panel;
     }
 
@@ -256,7 +267,7 @@ public class LobbyScreen extends ScreenAdapter {
                     nextButton.setDisabled(!roomReady || startRequested);
                     nextButton.setText(!roomReady ? "JOINING..."
                         : startRequested ? "STARTING..." : "START TEST");
-                    footerHelpLabel.setText("Start alone, or let friends join before starting.");
+                    footerHelpLabel.setText("Choose a map, then start alone or with friends.");
                     break;
                 }
                 selectionHost.add(createEnvironmentPanel()).grow();
@@ -305,7 +316,7 @@ public class LobbyScreen extends ScreenAdapter {
                 }
             });
             group.add(button);
-            grid.add(button).width(218f).height(78f).pad(5f);
+            grid.add(button).width(224f).height(84f).pad(5f);
             if ((index + 1) % 3 == 0) grid.row();
         }
         panel.add(grid).left().row();
@@ -375,7 +386,7 @@ public class LobbyScreen extends ScreenAdapter {
         ButtonGroup<TextButton> group = new ButtonGroup<>();
         group.setMinCheckCount(0);
         group.setMaxCheckCount(1);
-        for (Environment environment : Environment.values()) {
+        for (Environment environment : Environment.selectionOrder()) {
             int votes = voteCounts.getOrDefault(environment, 0);
             String cardText = environment.getDisplayName().toUpperCase()
                 + "\n" + environment.hazardSummary() + "\nVOTES: " + votes;
@@ -413,13 +424,41 @@ public class LobbyScreen extends ScreenAdapter {
     }
 
     private Table createTestingPanel() {
-        Table panel = panel("READY TO TEST", "Map voting is temporarily disabled. Canyon loads automatically.");
+        Table panel = panel("CHOOSE YOUR TEST MAP",
+            "No votes or full party needed. The player pressing Start Test chooses the battlefield.");
+        Table cards = new Table();
+        ButtonGroup<TextButton> group = new ButtonGroup<>();
+        group.setMinCheckCount(0);
+        group.setMaxCheckCount(1);
+        Environment choice = selectedEnvironment == null ? Environment.CANYON : selectedEnvironment;
+        for (Environment environment : Environment.selectionOrder()) {
+            TextButton button = new TextButton(environment.getDisplayName().toUpperCase()
+                + "\n" + environment.hazardSummary(), skin, "class-card");
+            button.getLabel().setWrap(true);
+            button.getLabel().setAlignment(Align.center);
+            group.add(button);
+            button.setChecked(environment == choice);
+            button.setDisabled(!roomReady || startRequested);
+            button.addListener(new ClickListener() {
+                @Override public void clicked(InputEvent event, float x, float y) {
+                    if (!roomReady || startRequested) return;
+                    selectedEnvironment = environment;
+                    Gdx.app.postRunnable(() -> showStep());
+                }
+            });
+            cards.add(button).width(222f).height(120f).pad(5f);
+        }
+        panel.add(cards).left().row();
+        Label selected = new Label("Selected: " + choice.getDisplayName()
+            + " - " + choice.getDescription(), skin, "default");
+        selected.setWrap(true);
+        panel.add(selected).width(660f).left().padTop(14f).row();
         Label details = new Label("Players connected: " + connectedPlayers
             + "\n\nStart with 1-4 players. No full party is required."
             + "\nSolo play stays open for movement and ability testing."
             + "\n\nPress Esc in the battlefield to return to the menu.", skin, "default");
         details.setWrap(true);
-        panel.add(details).width(660f).left().padTop(25f).row();
+        panel.add(details).width(660f).left().padTop(18f).row();
         return panel;
     }
 
@@ -433,11 +472,14 @@ public class LobbyScreen extends ScreenAdapter {
 
     private Table createClassTierTable(CharacterClass characterClass) {
         Table table = new Table();
+        int index = 0;
         for (StatType stat : StatType.values()) {
-            table.add(new Label(stat.getDisplayName(), skin, "caption")).width(68f).left();
+            table.add(new Label(stat.getDisplayName(), skin, "caption")).width(92f).left();
             Label value = new Label(Integer.toString(characterClass.getTier(stat)), skin, "default");
             value.setColor(FantasyUiTheme.SUCCESS);
-            table.add(value).width(32f).left();
+            table.add(value).width(44f).left();
+            index++;
+            if (index % 3 == 0) table.row();
         }
         return table;
     }
@@ -469,7 +511,7 @@ public class LobbyScreen extends ScreenAdapter {
             showStep();
         } else if (step == Step.ENVIRONMENT && testingMode && roomReady && !startRequested) {
             startRequested = true;
-            game.getNetworkClient().startTestMatch(localPlayerId);
+            game.getNetworkClient().startTestMatch(localPlayerId, selectedEnvironment);
             showStep();
         }
     }

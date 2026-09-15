@@ -32,12 +32,12 @@ public class PlayerRenderer implements Disposable {
     private static final float SPRITE_Y_OFFSET = -0.48f;
 
     private static final Color COLOR_PLAYER_RING = new Color(1f, 1f, 1f, 0.85f);
-    private static final Color COLOR_PATH = new Color(1f, 0.85f, 0.1f, 0.8f);
     private static final Color COLOR_STAMINA_BG = new Color(0.12f, 0.12f, 0.15f, 0.9f);
     private static final Color COLOR_STAMINA_FILL = new Color(0.1f, 0.9f, 0.3f, 1f);
     private static final Color COLOR_HP_BG = new Color(0.12f, 0.12f, 0.15f, 0.9f);
     private static final Color COLOR_HP_FILL = new Color(0.85f, 0.15f, 0.15f, 1f);
-    private static final Color COLOR_REACHABLE = new Color(0.2f, 0.5f, 0.9f, 0.30f);
+    private static final Color COLOR_REACHABLE = new Color(0.08f, 0.42f, 1f, 0.38f);
+    private static final Color COLOR_ACTIVE_TURN = new Color(1f, 0.82f, 0.25f, 1f);
     private static final Color COLOR_TARGET_IN_RANGE = new Color(0.25f, 1f, 0.35f, 0.95f);
     private static final Color COLOR_TARGET_OUT_OF_RANGE = new Color(1f, 0.25f, 0.2f, 0.95f);
     private static final Color COLOR_TEAM_AZURE = new Color(0.2f, 0.55f, 1f, 0.95f);
@@ -59,13 +59,13 @@ public class PlayerRenderer implements Disposable {
         this.spriteBatch = spriteBatch;
     }
 
-    public void renderLocal(Player player, Matrix4 projection, NavGrid navGrid, float delta) {
+    public void renderLocal(Player player, Matrix4 projection, NavGrid navGrid, float delta, boolean showMovement) {
         player.getAnimationController().update(
             delta, player.getPosition(), player.getMovementController());
         pulseTime += delta;
 
         float remaining = player.getMovementController().getRemainingMovementDistance();
-        if (player.isActiveTurn() && navGrid != null && !player.getMovementController().isMoving()
+        if (showMovement && navGrid != null && !player.getMovementController().isMoving()
             && (Math.abs(remaining - lastRemainingDistance) > 0.0001f
                 || !player.getPosition().epsilonEquals(lastReachablePosition, 0.001f)
                 || lastGridRevision != navGrid.getRevision())) {
@@ -78,11 +78,11 @@ public class PlayerRenderer implements Disposable {
             lastRemainingDistance = -1f;
         }
 
-        if (player.isActiveTurn() && !player.getMovementController().isMoving()) drawReachable(projection);
+        if (showMovement && !player.getMovementController().isMoving()) drawReachable(projection);
         drawCharacter(player, projection);
-        drawPath(player, projection);
         drawBars(player, projection, true);
         drawRing(player, projection, teamColor(player), 0.43f);
+        drawActiveTurn(player, projection);
     }
 
     public void renderEnemy(Player player, Matrix4 projection, float delta,
@@ -100,6 +100,7 @@ public class PlayerRenderer implements Disposable {
 
         drawCharacter(player, projection);
         drawBars(player, projection, false);
+        drawActiveTurn(player, projection);
     }
 
     private void drawReachable(Matrix4 projection) {
@@ -174,19 +175,10 @@ public class PlayerRenderer implements Disposable {
         return split;
     }
 
-    private void drawPath(Player player, Matrix4 projection) {
-        List<Vector2> path = player.getMovementController().getRemainingPath();
-        if (path == null || path.isEmpty()) return;
-
-        shapeRenderer.setProjectionMatrix(projection);
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        shapeRenderer.setColor(COLOR_PATH);
-        Vector2 previous = player.getPosition();
-        for (Vector2 waypoint : path) {
-            shapeRenderer.line(previous.x, previous.y, waypoint.x, waypoint.y);
-            previous = waypoint;
+    private void drawActiveTurn(Player player, Matrix4 projection) {
+        if (player.isActiveTurn() && player.isAlive()) {
+            drawRing(player, projection, COLOR_ACTIVE_TURN, 0.51f + 0.025f * (float) Math.sin(pulseTime * 4f));
         }
-        shapeRenderer.end();
     }
 
     private void drawBars(Player player, Matrix4 projection, boolean showStamina) {

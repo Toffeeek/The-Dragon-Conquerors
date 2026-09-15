@@ -10,8 +10,8 @@ import com.shared.shared.model.effect.StatusEffectType;
  * <ul>
  *   <li>{@link #BOG} — poison tiles. A character standing on a hazard tile at
  *       the start of its turn is poisoned. Localised: position matters.</li>
- *   <li>{@link #LAVA} — <b>every</b> player takes burn damage each turn,
- *       regardless of position. Global: a race against attrition.</li>
+ *   <li>{@link #LAVA} — glowing cracks burn for two turns; being pushed into
+ *       lava is instantly fatal. Safe stone and bridges do not burn players.</li>
  *   <li>{@link #CANYON} — the neutral map. No periodic damage, but falling off
  *       an edge is instant death.</li>
  * </ul>
@@ -34,8 +34,8 @@ import com.shared.shared.model.effect.StatusEffectType;
  */
 public enum Environment {
 
-    BOG("Bog",
-        "Sunken marshland. The pale water is toxic — do not linger in it.",
+    BOG("Map 3 - Bog",
+        "The final battlefield. Violet ground is poisonous; bridges and stairs connect the islands.",
         "bog.tmx",
         "PoisonTiles",
         StatusEffectType.POISON,
@@ -43,15 +43,15 @@ public enum Environment {
         false),
 
     LAVA("Lava",
-        "Volcanic flats. The air itself scorches; nobody escapes the heat.",
+        "Stone islands linked by bridges. Lava is fatal; glowing cracks burn for two turns.",
         "lava.tmx",
-        null,
+        "BurnTiles",
         StatusEffectType.BURN,
-        HazardScope.EVERY_PLAYER,
-        false),
+        HazardScope.TILE_BASED,
+        true),
 
-    CANYON("Canyon",
-        "A neutral highland shelf. No hazards underfoot — but the drop is fatal.",
+    CANYON("Map 1 - Canyon",
+        "Grassy islands with bridges and a raised plateau. Being pushed off an edge is fatal.",
         "canyon.tmx",
         "CliffEdges",
         null,
@@ -97,18 +97,17 @@ public enum Environment {
         return displayName;
     }
 
+    /** Presentation order, independent of enum/protocol identity. */
+    public static java.util.List<Environment> selectionOrder() {
+        return java.util.List.of(CANYON, LAVA, BOG);
+    }
+
     /** Flavour text for the environment-voting screen. */
     public String getDescription() {
         return description;
     }
 
-    /**
-     * Tiled map file for this environment.
-     *
-     * <p>Only {@code canyon.tmx} currently exists in {@code assets/maps/}; the
-     * bog and lava maps are still to be authored, and the client falls back to
-     * the default map until they are added.</p>
-     */
+    /** Legacy Tiled metadata; current artwork is selected through {@link BattlefieldArtwork}. */
     public String getMapFileName() {
         return mapFileName;
     }
@@ -127,23 +126,24 @@ public enum Environment {
         return hazardScope;
     }
 
-    /** True when leaving the walkable area kills outright (Canyon). */
+    /** True when falling into the surrounding void or lava kills outright. */
     public boolean isFallingLethal() {
         return fallingIsLethal;
     }
 
-    /** True when the hazard applies to everyone every turn (Lava). */
+    /** True when the hazard applies to everyone every turn. */
     public boolean affectsEveryone() {
         return hazardScope == HazardScope.EVERY_PLAYER;
     }
 
-    /** True when only characters on marked tiles are affected (Bog). */
+    /** True when only characters on marked tiles are affected. */
     public boolean affectsHazardTilesOnly() {
         return hazardScope == HazardScope.TILE_BASED;
     }
 
     /** One-line hazard summary for the voting screen. */
     public String hazardSummary() {
+        if (this == LAVA) return "Lava is instant death; glowing cracks burn for 2 turns";
         switch (hazardScope) {
             case EVERY_PLAYER:
                 return "Every player suffers " + hazardEffect.getDisplayName() + " each turn";

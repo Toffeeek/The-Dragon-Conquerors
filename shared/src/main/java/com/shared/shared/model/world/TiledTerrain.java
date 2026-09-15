@@ -23,8 +23,13 @@ final class TiledTerrain {
     private final String[][] terrain;
     private final boolean[][] ground;
     private final List<List<Rectangle>> blockedRows;
+    private byte[][] imageTypes;
 
     TiledTerrain(String mapName) {
+        this(mapName, true);
+    }
+
+    TiledTerrain(String mapName, boolean useImageArtwork) {
         try {
             XmlReader.Element map = read(mapName + ".tmx");
             int width = map.getIntAttribute("width"), height = map.getIntAttribute("height");
@@ -79,6 +84,18 @@ final class TiledTerrain {
                     }
                 }
             }
+            BattlefieldArtwork artwork = useImageArtwork ? BattlefieldArtwork.forEnvironment(Environment.fromName(mapName)) : null;
+            if (artwork != null) {
+                imageTypes = new byte[480][272];
+                try (DataInputStream input = new DataInputStream(TiledTerrain.class.getResourceAsStream(
+                    "/battlefields/" + artwork.name + "-mask.bin"))) {
+                    if (input.readInt() != 480 || input.readInt() != 272) throw new IllegalStateException("Invalid image mask size");
+                    for (int y = 271; y >= 0; y--) for (int x = 0; x < 480; x++) {
+                        imageTypes[x][y] = input.readByte();
+                        ground[x][y] = imageTypes[x][y] == 0 || imageTypes[x][y] == 3 || imageTypes[x][y] == 4;
+                    }
+                }
+            }
             // Merge neighboring solid pixels into short horizontal rectangles for fast circle/sweep queries.
             for (int y = 0; y < ground[0].length; y++) {
                 blockedRows.add(new ArrayList<>());
@@ -116,6 +133,15 @@ final class TiledTerrain {
     String at(float x, float y) {
         int px = (int)Math.floor(x * TILE_PIXELS), py = (int)Math.floor(y * TILE_PIXELS);
         if (px < 0 || py < 0 || px >= ground.length || py >= ground[0].length) return "fall";
+        if (imageTypes != null) {
+            return switch (imageTypes[px][py]) {
+                case 0 -> "ground";
+                case 2 -> "fall";
+                case 3 -> "poison";
+                case 4 -> "burn";
+                default -> "blocked";
+            };
+        }
         if (ground[px][py]) return "ground";
         return terrain[px / TILE_PIXELS][py / TILE_PIXELS];
     }

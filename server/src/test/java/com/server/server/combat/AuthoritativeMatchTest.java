@@ -60,18 +60,18 @@ class AuthoritativeMatchTest {
     void movementIsBoundedByStaminaAndPlayerCollision() {
         AuthoritativeMatch match = match();
         AuthoritativeMatch budgetMatch = match();
-        CombatCommandResult tooFar = budgetMatch.move(0, new Vector2(20f, 5f));
+        CombatCommandResult tooFar = budgetMatch.move(0, new Vector2(26.5f, 10f));
         assertTrue(tooFar.isAccepted(), "A long legal route stops at the movement limit");
         assertEquals(0f, player(tooFar, 0).getRemainingMovement(), 0.001f);
-        assertFalse(player(tooFar, 0).getPosition().epsilonEquals(new Vector2(20f, 5f), 0.01f));
+        assertFalse(player(tooFar, 0).getPosition().epsilonEquals(new Vector2(26.5f, 10f), 0.01f));
 
-        CombatCommandResult occupied = match.move(0, new Vector2(6f, 5f));
+        CombatCommandResult occupied = match.move(0, new Vector2(15f, 8f));
         assertFalse(occupied.isAccepted());
         assertTrue(occupied.getError().contains("occupies"));
 
-        CombatCommandResult accepted = match.move(0, new Vector2(4f, 4f));
+        CombatCommandResult accepted = match.move(0, new Vector2(13f, 8f));
         assertTrue(accepted.isAccepted());
-        assertEquals(4f, player(accepted, 0).getPosition().y, 0.001f);
+        assertEquals(8f, player(accepted, 0).getPosition().y, 0.001f);
     }
 
     @Test
@@ -100,10 +100,10 @@ class AuthoritativeMatchTest {
 
     private AuthoritativeMatch match() {
         List<LobbyPlayer> players = List.of(
-            player(0, CharacterClass.WRAITH, Race.UNDEAD, 1, 5f, 5f),
-            player(1, CharacterClass.MAGE, Race.ELF, 1, 7f, 8f),
-            player(2, CharacterClass.PALADIN, Race.HUMAN, 2, 6f, 5f),
-            player(3, CharacterClass.CLERIC, Race.DRAGONBORNE, 2, 8f, 8f));
+            player(0, CharacterClass.WRAITH, Race.UNDEAD, 1, 14f, 8f),
+            player(1, CharacterClass.MAGE, Race.ELF, 1, 14f, 11f),
+            player(2, CharacterClass.PALADIN, Race.HUMAN, 2, 15f, 8f),
+            player(3, CharacterClass.CLERIC, Race.DRAGONBORNE, 2, 17f, 11f));
         return new AuthoritativeMatch(players, Environment.CANYON,
             new AbilityResolver(19L));
     }

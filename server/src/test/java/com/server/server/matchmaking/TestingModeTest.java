@@ -29,7 +29,7 @@ class TestingModeTest {
         assertFalse(state.isMatchOver());
         assertEquals(id, state.getActivePlayerId());
         assertTrue(room.getMatches().handle(id, Packet.builder().ID(id).action(Action.MOVE)
-            .finalPosition(new Vector2(3f, 5f)).build()).isAccepted());
+            .finalPosition(new Vector2(4.3f, 8.6f)).build()).isAccepted());
         for (int turn = 0; turn < 3; turn++) {
             var next = room.getMatches().handle(id, Packet.builder().ID(id).action(Action.END_TURN).build());
             assertTrue(next.isAccepted());

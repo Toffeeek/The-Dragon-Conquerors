@@ -27,7 +27,7 @@ class TerrainContourTest {
 
     @Test void collisionFollowsArtworkPixelsIncludingTheRotatedPond() throws Exception {
         BufferedImage map = artwork();
-        TiledTerrain terrain = new TiledTerrain("canyon");
+        TiledTerrain terrain = new TiledTerrain("canyon", false);
         Set<Integer> grass = Set.of(0x3e8948, 0x265c42, 0x3d6c43);
         for (int y = 0; y < map.getHeight(); y++) for (int x = 0; x < map.getWidth(); x++) {
             int color = map.getRGB(x, y);
@@ -39,7 +39,7 @@ class TerrainContourTest {
     }
 
     @Test void grassInsideMixedShoreTilesIsReachableWithoutPermittingWater() {
-        BattlefieldDefinition field = BattlefieldDefinition.forEnvironment(Environment.CANYON);
+        BattlefieldDefinition field = new BattlefieldDefinition(Environment.LAVA, List.of(), false);
         BattlefieldNavigation nav = new BattlefieldNavigation(field);
         int restoredGround = 0;
         Vector2 nearPond = null;
@@ -62,7 +62,7 @@ class TerrainContourTest {
     }
 
     @Test void sweptFootprintDoesNotCutThroughThinCliffPixels() {
-        BattlefieldDefinition field = BattlefieldDefinition.forEnvironment(Environment.CANYON);
+        BattlefieldDefinition field = new BattlefieldDefinition(Environment.LAVA, List.of(), false);
         assertFalse(field.pathIsWalkable(new Vector2(14.5f, 10.5f), new Vector2(16.5f, 10.5f)));
         assertFalse(field.pathIsWalkable(new Vector2(2f, 8.5f), new Vector2(6f, 8.5f)));
     }

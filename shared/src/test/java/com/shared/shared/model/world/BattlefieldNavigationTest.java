@@ -6,7 +6,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BattlefieldNavigationTest {
-    private final BattlefieldDefinition field = BattlefieldDefinition.forEnvironment(Environment.CANYON);
+    // Preserve the original TMX regression fixtures independently of replacement artwork.
+    private final BattlefieldDefinition field = new BattlefieldDefinition(Environment.LAVA, List.of(), false);
     private final BattlefieldNavigation nav = new BattlefieldNavigation(field);
 
     @Test void collisionMatchesWaterCliffsAndFlippedTilesInTheMap() {

@@ -10,6 +10,8 @@ import com.shared.shared.model.combat.CombatContext;
 import com.shared.shared.model.combat.Combatant;
 import com.shared.shared.model.combat.TurnQueue;
 import com.shared.shared.model.combat.TurnStartReport;
+import com.shared.shared.model.combat.StatusEffectEngine;
+import com.shared.shared.model.effect.StatusEffectType;
 import com.shared.shared.model.world.Environment;
 import com.shared.shared.model.world.BattlefieldDefinition;
 import com.shared.shared.model.world.BattlefieldNavigation;
@@ -103,10 +105,17 @@ public final class AuthoritativeMatch {
         List<Vector2> path = navigation.findPath(actor.getPosition(), destination, actor.getRemainingMovement(), occupied);
         if (path.isEmpty()) return CombatCommandResult.rejected("No movement points or no safe route around terrain and players.");
         float distance = BattlefieldNavigation.length(actor.getPosition(), path);
+        boolean crossedCrack = false;
+        Vector2 previous = actor.getPosition();
+        for (Vector2 waypoint : path) {
+            crossedCrack |= battlefield.pathCrossesHazard(previous, waypoint);
+            previous = waypoint;
+        }
         actor.moveAlong(path);
         lastActorId = playerId;
         lastAbility = null;
         lastMessage = actor.getUsername() + " moves " + String.format("%.1f", distance) + " units.";
+        if (crossedCrack) applyLavaBurn(actor);
         autoEndTurn(actor);
         return CombatCommandResult.accepted(snapshot());
     }
@@ -140,7 +149,14 @@ public final class AuthoritativeMatch {
         lastMessage = outcome.describe();
         resolvePushes(outcome, positionsBefore);
         for (ServerCombatant player : players.values()) {
-            if (!player.getPosition().epsilonEquals(positionsBefore.get(player.getId()), 0.001f)) player.markDisplaced();
+            if (!player.getPosition().epsilonEquals(positionsBefore.get(player.getId()), 0.001f)) {
+                player.markDisplaced();
+                // Teleport touches only its landing tile; pushes touch the traversed ground.
+                boolean hazard = ability == AbilityType.TELEPORT && player == actor
+                    ? battlefield.isHazard(player.getPosition())
+                    : battlefield.pathCrossesHazard(positionsBefore.get(player.getId()), player.getPosition());
+                if (hazard) applyLavaBurn(player);
+            }
         }
         if (!finishIfOver()) autoEndTurn(actor);
         return CombatCommandResult.accepted(snapshot());
@@ -278,11 +294,12 @@ public final class AuthoritativeMatch {
             if (target == null || start == null) continue;
 
             Vector2 destination = target.getPosition();
-            if (battlefield.getEnvironment() == Environment.CANYON
+            if (battlefield.getEnvironment().isFallingLethal()
                 && battlefield.pathCrossesLethalFall(start, destination)) {
                 target.getStats().setHp(0);
                 target.getPosition().set(battlefield.lastWalkablePoint(start, destination));
-                lastMessage += " " + target.getUsername() + " is pushed into the canyon.";
+                lastMessage += " " + target.getUsername() + (battlefield.getEnvironment() == Environment.LAVA
+                    ? " is pushed into lava." : " is pushed into the canyon.");
             } else if (!battlefield.pathIsWalkable(start, destination)) {
                 target.getPosition().set(battlefield.lastWalkablePoint(start, destination));
                 lastMessage += " " + target.getUsername() + " is stopped by terrain.";
@@ -294,5 +311,12 @@ public final class AuthoritativeMatch {
         if (fragment == null || fragment.isBlank()) return;
         if (builder.length() > 0) builder.append("; ");
         builder.append(fragment);
+    }
+
+    private void applyLavaBurn(ServerCombatant player) {
+        if (battlefield.getEnvironment() == Environment.LAVA && context.getEffects().apply(player,
+            StatusEffectType.BURN, StatusEffectEngine.ENVIRONMENT_SOURCE_ID, StatusEffectEngine.LAVA_BURN_TURNS)) {
+            lastMessage += " " + player.getUsername() + " steps on a glowing crack: Burn for 2 turns.";
+        }
     }
 }

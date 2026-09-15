@@ -9,6 +9,10 @@ import com.shared.shared.model.Packet;
 import com.shared.shared.model.Race;
 import com.shared.shared.model.ability.AbilityType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import com.shared.shared.model.world.Environment;
+import com.shared.shared.model.world.BattlefieldArtwork;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -22,6 +26,31 @@ import static org.junit.jupiter.api.Assertions.*;
     properties = "game.testing-mode=true")
 class SoloTestingWebSocketTest {
     @LocalServerPort private int port;
+
+    @ParameterizedTest
+    @EnumSource(Environment.class)
+    void soloPlayerCanSelectEachMapAndMove(Environment environment) throws Exception {
+        BlockingQueue<Packet> packets = new LinkedBlockingQueue<>();
+        NetworkClient client = new NetworkClient("ws://localhost:" + port + "/ws");
+        client.setPacketHandler(packets::add);
+        try {
+            client.connect();
+            client.join("Map tester", new Vector2(), 1, CharacterClass.PALADIN, Race.HUMAN);
+            int id = await(packets, Action.PRIVATE_JOIN_CONFIRMATION).getID();
+            await(packets, Action.ROOM_READY);
+            client.startTestMatch(id, environment);
+            Packet start = await(packets, Action.MATCH_START);
+            assertEquals(environment, start.getEnvironment());
+            assertEquals(environment, start.getMatchState().getEnvironment());
+            assertFalse(start.getMatchState().isMatchOver());
+            Vector2 goal = environment == Environment.CANYON ? new Vector2(4.3f, 8.6f)
+                : environment == Environment.BOG ? BattlefieldArtwork.MAP3.worldPoint(220,510)
+                : BattlefieldArtwork.MAP2.worldPoint(260,240);
+            client.move(id, goal);
+            Packet moved = await(packets, Action.MATCH_STATE);
+            assertEquals(goal, moved.getMatchState().getPlayers().get(0).getPosition());
+        } finally { client.disconnect(); }
+    }
 
     @Test
     void oneRealClientCanJoinStartMoveAndEndTurnWithoutVoting() throws Exception {
@@ -39,14 +68,14 @@ class SoloTestingWebSocketTest {
             Packet start = await(packets, Action.MATCH_START);
             assertEquals(1, start.getMatchState().getPlayers().size());
             assertFalse(start.getMatchState().isMatchOver());
-            client.move(id, new Vector2(3f, 5f));
+            client.move(id, new Vector2(4.3f, 8.6f));
             Packet moved = await(packets, Action.MATCH_STATE);
-            assertEquals(3f, moved.getMatchState().getPlayers().get(0).getPosition().x, 0.001f);
+            assertEquals(4.3f, moved.getMatchState().getPlayers().get(0).getPosition().x, 0.001f);
             assertFalse(moved.getMatchState().getPlayers().get(0).getMovementPath().isEmpty());
             client.useAbility(id, AbilityType.ACCURACY_BOOST, id, null);
             Packet action = await(packets, Action.MATCH_STATE);
             assertEquals(0, action.getMatchState().getPlayers().get(0).getActionPoints());
-            client.move(id, new Vector2(8.5f, 5f));
+            client.move(id, new Vector2(15f, 8f));
             Packet automatic = await(packets, Action.MATCH_STATE);
             assertTrue(automatic.getMatchState().getMessage().contains("automatically"));
             assertEquals(1, automatic.getMatchState().getPlayers().get(0).getActionPoints());

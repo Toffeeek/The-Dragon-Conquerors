@@ -169,9 +169,13 @@ public class NetworkClient
     }
 
     public void startTestMatch(int playerId) {
+        startTestMatch(playerId, null);
+    }
+
+    public void startTestMatch(int playerId, Environment environment) {
         if (session != null && session.isConnected() && playerId >= 0) {
             session.send("/app/game.startTestMatch", Packet.builder()
-                .ID(playerId).roomId(roomId).action(Action.START_TEST_MATCH).build());
+                .ID(playerId).roomId(roomId).environment(environment).action(Action.START_TEST_MATCH).build());
         }
     }
 

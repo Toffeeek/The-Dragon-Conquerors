@@ -1,10 +1,13 @@
 package com.github.thedragonconquerors;
 
+import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.NinePatch;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFontParameter;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
@@ -20,9 +23,8 @@ import java.util.Random;
 /**
  * Shared procedural UI theme for menu and lobby screens.
  *
- * The theme deliberately uses no external textures or fonts so it can be added to
- * the current project without changing the asset pipeline. Replace the generated
- * drawables and BitmapFonts later when final art assets are available.
+ * Generated drawables with size-specific TrueType text when a system font is
+ * available. The built-in bitmap font remains a fallback on other installations.
  */
 public final class FantasyUiTheme implements Disposable {
     public static final float VIRTUAL_WIDTH = 1280f;
@@ -59,8 +61,10 @@ public final class FantasyUiTheme implements Disposable {
     private final Drawable panelAlt;
     private final Drawable inset;
     private final Drawable divider;
+    private final FileHandle fontFile;
 
     public FantasyUiTheme() {
+        fontFile = findReadableFont();
         background = new TextureRegionDrawable(createDungeonBackground());
         panel = new NinePatchDrawable(createPatch(PANEL, BORDER, 14, 2));
         panelAlt = new NinePatchDrawable(createPatch(PANEL_ALT, BORDER, 12, 1));
@@ -98,13 +102,18 @@ public final class FantasyUiTheme implements Disposable {
         return divider;
     }
 
+    /** Flat UI fill with its original colour, owned and disposed by this theme. */
+    public Drawable solid(Color color) {
+        return new TextureRegionDrawable(createSolidTexture(color, 4, 4));
+    }
+
     private void createFontsAndLabels() {
-        BitmapFont body = font(1.05f);
-        BitmapFont title = font(2.85f);
-        BitmapFont heading = font(1.65f);
-        BitmapFont button = font(1.10f);
-        BitmapFont small = font(0.86f);
-        BitmapFont tiny = font(0.74f);
+        BitmapFont body = font(18, 1.05f);
+        BitmapFont title = font(44, 2.85f);
+        BitmapFont heading = font(26, 1.65f);
+        BitmapFont button = font(19, 1.10f);
+        BitmapFont small = font(16, 0.86f);
+        BitmapFont tiny = font(14, 0.74f);
 
         // Register every font so Skin.dispose() owns and disposes them.
         skin.add("font-body", body, BitmapFont.class);
@@ -126,11 +135,50 @@ public final class FantasyUiTheme implements Disposable {
         skin.add("class-role", new Label.LabelStyle(small, GOLD_DIM), Label.LabelStyle.class);
     }
 
-    private BitmapFont font(float scale) {
+    private BitmapFont font(int size, float fallbackScale) {
+        if (fontFile != null) {
+            FreeTypeFontGenerator generator = new FreeTypeFontGenerator(fontFile);
+            try {
+                FreeTypeFontParameter parameter = new FreeTypeFontParameter();
+                parameter.size = size;
+                parameter.color = Color.WHITE;
+                parameter.minFilter = Texture.TextureFilter.Linear;
+                parameter.magFilter = Texture.TextureFilter.Linear;
+                parameter.hinting = FreeTypeFontGenerator.Hinting.Full;
+                parameter.characters = FreeTypeFontGenerator.DEFAULT_CHARS;
+                BitmapFont font = generator.generateFont(parameter);
+                font.setUseIntegerPositions(true);
+                return font;
+            } finally {
+                generator.dispose();
+            }
+        }
+
         BitmapFont font = new BitmapFont();
-        font.getData().setScale(scale);
+        font.getRegion().getTexture().setFilter(
+            Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        font.getData().setScale(fallbackScale);
         font.setUseIntegerPositions(true);
         return font;
+    }
+
+    private FileHandle findReadableFont() {
+        String windowsDirectory = System.getenv("WINDIR");
+        String[] paths = {
+            (windowsDirectory == null ? "C:/Windows" : windowsDirectory) + "/Fonts/segoeui.ttf",
+            (windowsDirectory == null ? "C:/Windows" : windowsDirectory) + "/Fonts/arial.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "/usr/share/fonts/TTF/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+            "/System/Library/Fonts/Supplemental/Arial.ttf"
+        };
+        for (String path : paths) {
+            FileHandle handle = new FileHandle(path);
+            if (handle.exists() && !handle.isDirectory()) return handle;
+        }
+        return null;
     }
 
     private void createButtons() {
