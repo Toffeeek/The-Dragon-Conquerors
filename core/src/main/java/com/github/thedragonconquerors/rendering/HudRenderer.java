@@ -1,339 +1,243 @@
 package com.github.thedragonconquerors.rendering;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.scenes.scene2d.*;
+import com.badlogic.gdx.scenes.scene2d.ui.*;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
+import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.Disposable;
-import com.badlogic.gdx.utils.viewport.Viewport;
-import com.github.thedragonconquerors.combat.ActionResult;
-import com.github.thedragonconquerors.combat.ActionType;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
+import com.github.thedragonconquerors.FantasyUiTheme;
 import com.github.thedragonconquerors.entities.Player;
-import com.github.thedragonconquerors.stats.StatComponent;
+import com.github.thedragonconquerors.input.BattleInteraction;
+import com.shared.shared.model.ability.AbilityType;
+import com.shared.shared.network.MatchState;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 
-public class HudRenderer implements Disposable {
+/** Mouse-driven overlay; no space is reserved outside the battlefield. */
+public final class HudRenderer implements Disposable {
+    // Keep the original overlay layout, uniformly reduced by 40%.
+    private static final float HUD_SCALE = 0.60f;
+    private final FantasyUiTheme theme = new FantasyUiTheme();
+    private final Skin skin = theme.skin();
+    private final ScreenViewport viewport = new ScreenViewport();
+    private final Stage stage = new Stage(viewport);
+    private final BattleInteraction interaction;
+    private final Label hpText, manaText, staminaText, apText, turnText, roundText, hint;
+    private final ProgressBar hp, mana, stamina;
+    private final TextButton move, action, end, cancel;
+    private final Table abilityHost = new Table(), abilityList = new Table(), logRows = new Table();
+    private final ScrollPane logScroll;
+    private final List<AbilityType> abilities;
+    private final List<TextButton> abilityButtons = new ArrayList<>();
+    private final List<String> history = new ArrayList<>();
+    private boolean listVisible;
+    private String targetingPrompt = "", feedback = "", activeName = "Waiting for players";
+    private float feedbackTimer;
+    private int round;
 
-    private final SpriteBatch   hudBatch;
-    private final ShapeRenderer shapeRenderer;
-    private final BitmapFont    font;
-    private final Viewport      viewport;
+    public HudRenderer(List<AbilityType> abilities, BattleInteraction interaction,
+                       Runnable onMove, Runnable onAction, Consumer<AbilityType> onAbility,
+                       Runnable onEnd, Runnable onCancel) {
+        this.abilities = abilities;
+        this.interaction = interaction;
+        Table resources = panel();
+        resources.add(new Label("YOUR RESOURCES", skin, "section")).left().padBottom(8).row();
+        hp = bar(new Color(0.83f, 0.20f, 0.24f, 1));
+        mana = bar(new Color(0.20f, 0.46f, 0.92f, 1));
+        stamina = bar(new Color(0.22f, 0.68f, 0.42f, 1));
+        hpText = addBar(resources, hp);
+        manaText = addBar(resources, mana);
+        staminaText = addBar(resources, stamina);
+        apText = new Label("", skin, "section");
+        resources.add(apText).left().padTop(4);
+        anchor(Align.topLeft).add(resources).width(266);
 
-    // ── colours ───────────────────────────────────────────────────
-    private static final Color BAR_BG         = new Color(0.2f,  0.2f,  0.2f,  0.85f);
-    private static final Color HP_FILL        = new Color(0.85f, 0.15f, 0.15f, 1f);
-    private static final Color HP_LOW         = new Color(1.0f,  0.35f, 0.05f, 1f);
-    private static final Color MANA_FILL      = new Color(0.15f, 0.40f, 0.95f, 1f);
-    private static final Color STAMINA_FILL   = new Color(0.2f,  0.8f,  0.3f,  1f);
-    private static final Color TEXT_COLOR     = new Color(0.9f,  0.9f,  0.9f,  1f);
+        Table turn = panel();
+        turnText = new Label("", skin, "heading");
+        turnText.setAlignment(Align.center);
+        turnText.setEllipsis(true);
+        roundText = new Label("", skin, "caption");
+        roundText.setEllipsis(true);
+        turn.add(turnText).width(330).row();
+        turn.add(roundText).width(330).padTop(3);
+        anchor(Align.topRight).add(turn).width(362);
 
-    // action panel
-    private static final Color PANEL_BG       = new Color(0.08f, 0.08f, 0.12f, 0.95f);
-    private static final Color PANEL_BORDER   = new Color(0.6f,  0.6f,  0.7f,  1f);
-    private static final Color BTN_BG         = new Color(0.15f, 0.15f, 0.22f, 1f);
-    private static final Color BTN_HOVER      = new Color(0.25f, 0.25f, 0.38f, 1f);
-    private static final Color BTN_NOMANA     = new Color(0.3f,  0.3f,  0.35f, 0.85f);
-    private static final Color BTN_BORDER     = new Color(0.5f,  0.5f,  0.6f,  1f);
-    private static final Color TOGGLE_BG      = new Color(0.18f, 0.22f, 0.32f, 1f);
-    private static final Color TOGGLE_HOVER   = new Color(0.28f, 0.34f, 0.50f, 1f);
-    private static final Color TOGGLE_BORDER  = new Color(0.7f,  0.75f, 0.9f,  1f);
-    private static final Color FEEDBACK_COLOR = new Color(1f,    0.9f,  0.3f,  1f);
-    private static final Color MANA_TEXT      = new Color(0.5f,  0.7f,  1.0f,  1f);
-
-    // ── stat bar layout (bottom-left) ─────────────────────────────
-    private static final float BAR_W        = 200f;
-    private static final float BAR_H        = 14f;
-    private static final float BAR_X        = 16f;
-    private static final float GAP          = 22f;
-    private static final float STAMINA_Y    = 36f;
-    private static final float MANA_Y       = STAMINA_Y + GAP;
-    private static final float HP_Y         = MANA_Y + GAP;
-    private static final float LABEL_OFFSET = BAR_H + 3f;
-
-    // ── toggle button (bottom-right) ──────────────────────────────
-    private static final float TOGGLE_W = 100f;
-    private static final float TOGGLE_H = 32f;
-    private static final float TOGGLE_PAD = 12f;   // from screen edge
-
-    // ── action panel ──────────────────────────────────────────────
-    private static final float BTN_W    = 180f;
-    private static final float BTN_H    = 38f;
-    private static final float BTN_GAP  = 6f;
-    private static final float PANEL_PAD = 8f;
-
-    // ── state ─────────────────────────────────────────────────────
-    private boolean panelOpen           = false;
-    private int     hoveredActionIndex  = -1;
-
-    private String feedbackMessage = "";
-    private float  feedbackTimer   = 0f;
-    private static final float FEEDBACK_DURATION = 2.5f;
-
-    // ── callback ──────────────────────────────────────────────────
-    /** Set by GameOneScreen so HudRenderer can fire actions on click. */
-    private java.util.function.Consumer<Integer> onActionSelected;
-
-    public HudRenderer(Viewport viewport) {
-        this.viewport      = viewport;
-        this.hudBatch      = new SpriteBatch();
-        this.shapeRenderer = new ShapeRenderer();
-        this.font          = new BitmapFont();
-        this.font.setColor(TEXT_COLOR);
-    }
-
-    public void setOnActionSelected(java.util.function.Consumer<Integer> cb) {
-        this.onActionSelected = cb;
-    }
-
-    public void showFeedback(ActionResult result) {
-        this.feedbackMessage = result.message;
-        this.feedbackTimer   = FEEDBACK_DURATION;
-    }
-
-    public void showFeedback(String message) {
-        this.feedbackMessage = message;
-        this.feedbackTimer   = FEEDBACK_DURATION;
-    }
-
-    // ──────────────────────────────────────────────────────────────
-    //  Hit-testing (called from GameOneScreen.touchDown)
-    // ──────────────────────────────────────────────────────────────
-
-    /**
-     * Call this from GameOneScreen whenever a left-click occurs.
-     * screenX/screenY are raw LibGDX screen coords (y=0 at top).
-     * Returns true if the HUD consumed the click (so movement should be suppressed).
-     */
-    public boolean handleClick(int screenX, int screenY, ActionType[] actions, StatComponent stats) {
-        int sw = viewport.getScreenWidth();
-        int sh = viewport.getScreenHeight();
-        // screenX/Y are full-window coords; subtract letterbox offset, then flip Y
-        float fx = screenX - viewport.getScreenX();
-        float fy = sh - (screenY - viewport.getScreenY());
-
-        // ── toggle button ─────────────────────────────────────────
-        float toggleX = sw - TOGGLE_W - TOGGLE_PAD;
-        float toggleY = TOGGLE_PAD;
-        if (fx >= toggleX && fx <= toggleX + TOGGLE_W &&
-            fy >= toggleY && fy <= toggleY + TOGGLE_H) {
-            panelOpen = !panelOpen;
-            return true;
+        Table controls = panel();
+        hint = new Label("Choose Move or Action to begin.", skin, "status");
+        hint.setWrap(true);
+        controls.add(hint).width(400).left().padBottom(8).row();
+        for (AbilityType ability : abilities) {
+            TextButton button = button(ability.getDisplayName(), "quiet", () -> onAbility.accept(ability));
+            button.getLabel().setAlignment(Align.left);
+            button.padLeft(12);
+            abilityButtons.add(button);
+            abilityList.add(button).width(400).height(38).padBottom(4).row();
         }
+        controls.add(abilityHost).growX().row();
+        Table commands = new Table();
+        move = button("MOVE", "secondary", onMove);
+        action = button("ACTION", "secondary", onAction);
+        end = button("END TURN", "primary", onEnd);
+        cancel = button("CANCEL", "quiet", onCancel);
+        commands.add(move).width(95).height(40).padRight(5);
+        commands.add(action).width(95).height(40).padRight(5);
+        commands.add(end).width(115).height(40).padRight(5);
+        commands.add(cancel).width(80).height(40);
+        controls.add(commands);
+        anchor(Align.bottomLeft).add(controls).width(428);
 
-        // ── action buttons (only when open) ───────────────────────
-        if (panelOpen && actions != null) {
-            float panelW = BTN_W + PANEL_PAD * 2;
-            float panelH = PANEL_PAD + actions.length * (BTN_H + BTN_GAP);
-            float panelX = sw - panelW - TOGGLE_PAD;
-            float panelY = TOGGLE_PAD + TOGGLE_H + 4f;
+        Table log = panel();
+        log.add(new Label("BATTLE LOG", skin, "section")).left().padBottom(8).row();
+        logRows.top().left();
+        ScrollPane.ScrollPaneStyle scrollStyle = new ScrollPane.ScrollPaneStyle();
+        scrollStyle.vScroll = ((TextureRegionDrawable) theme.divider()).tint(FantasyUiTheme.GOLD_DIM);
+        scrollStyle.vScrollKnob = theme.divider();
+        logScroll = new ScrollPane(logRows, scrollStyle);
+        logScroll.setScrollingDisabled(true, false);
+        logScroll.setOverscroll(false, false);
+        logScroll.setFadeScrollBars(false);
+        log.add(logScroll).width(324).height(145);
+        anchor(Align.bottomRight).add(log).width(352);
+        resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+    }
 
-            for (int i = 0; i < actions.length; i++) {
-                float bx = panelX + PANEL_PAD;
-                float by = panelY + PANEL_PAD + (actions.length - 1 - i) * (BTN_H + BTN_GAP);
-                if (fx >= bx && fx <= bx + BTN_W && fy >= by && fy <= by + BTN_H) {
-                    boolean canAfford = stats.getMana() >= actions[i].manaCost;
-                    if (canAfford && onActionSelected != null) {
-                        onActionSelected.accept(i);
-                        panelOpen = false;   // close panel after selecting
-                    } else if (!canAfford) {
-                        showFeedback("Not enough mana for " + actions[i].displayName + "!");
-                    }
-                    return true;
-                }
-            }
-
-            // click inside panel background but not a button — still consume
-            if (fx >= panelX && fx <= panelX + panelW &&
-                fy >= panelY && fy <= panelY + panelH) {
+    public Stage stage() { return stage; }
+    private Table anchor(int alignment) {
+        Table root = new Table();
+        root.setFillParent(true);
+        root.align(alignment).pad(16);
+        root.setTouchable(Touchable.childrenOnly);
+        stage.addActor(root);
+        return root;
+    }
+    private Table panel() {
+        Table table = new Table();
+        table.setBackground(theme.panel());
+        table.pad(14);
+        // Empty panel space consumes input too: never move through the HUD.
+        table.setTouchable(Touchable.enabled);
+        table.addListener(new InputListener() {
+            @Override public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
                 return true;
             }
-        }
-
-        return false;
+        });
+        return table;
     }
-
-    /**
-     * Update hovered action based on mouse position (call each frame with Gdx.input.getX/Y).
-     */
-    public void updateHover(int screenX, int screenY, ActionType[] actions) {
-        if (!panelOpen || actions == null) { hoveredActionIndex = -1; return; }
-        int sw = viewport.getScreenWidth();
-        int sh = viewport.getScreenHeight();
-        // screenX/Y are full-window coords; subtract letterbox offset, then flip Y
-        float fx = screenX - viewport.getScreenX();
-        float fy = sh - (screenY - viewport.getScreenY());
-
-        float panelW = BTN_W + PANEL_PAD * 2;
-        float panelX = sw - panelW - TOGGLE_PAD;
-        float panelY = TOGGLE_PAD + TOGGLE_H + 4f;
-
-        hoveredActionIndex = -1;
-        for (int i = 0; i < actions.length; i++) {
-            float bx = panelX + PANEL_PAD;
-            float by = panelY + PANEL_PAD + (actions.length - 1 - i) * (BTN_H + BTN_GAP);
-            if (fx >= bx && fx <= bx + BTN_W && fy >= by && fy <= by + BTN_H) {
-                hoveredActionIndex = i;
-                break;
+    private ProgressBar bar(Color color) {
+        ProgressBar.ProgressBarStyle style = new ProgressBar.ProgressBarStyle();
+        Drawable background = theme.solid(new Color(0.16f, 0.18f, 0.21f, 1));
+        Drawable fill = theme.solid(color);
+        background.setMinHeight(23);
+        fill.setMinHeight(23);
+        style.background = background;
+        style.knobBefore = fill;
+        ProgressBar result = new ProgressBar(0, 1, 0.001f, false, style);
+        result.setTouchable(Touchable.disabled);
+        return result;
+    }
+    private Label addBar(Table table, ProgressBar bar) {
+        Label label = new Label("", skin, "status");
+        label.setAlignment(Align.center);
+        table.add(new Stack(bar, label)).width(238).height(23).padBottom(5).row();
+        return label;
+    }
+    private TextButton button(String text, String style, Runnable callback) {
+        TextButton button = new TextButton(text, skin, style);
+        button.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent event, float x, float y) {
+                if (!button.isDisabled()) callback.run();
             }
-        }
+        });
+        return button;
     }
-
-    // ──────────────────────────────────────────────────────────────
-    //  Render
-    // ──────────────────────────────────────────────────────────────
-
-    public void render(Player player, float delta) {
-        feedbackTimer = Math.max(0f, feedbackTimer - delta);
-
-        int sw = viewport.getScreenWidth();
-        int sh = viewport.getScreenHeight();
-        Matrix4 screen = new Matrix4().setToOrtho2D(0, 0, sw, sh);
-
-        StatComponent stats     = player.getStats();
-        float maxMovement       = player.getMovementController().getMaxMovementDistance();
-        float remainingMovement = player.getMovementController().getRemainingMovementDistance();
-        ActionType[] actions    = ActionType.availableFor(player.getCharacterClass());
-
-        float hpRatio      = (float) stats.getHp()   / stats.getMaxHp();
-        float manaRatio    = (float) stats.getMana()  / stats.getMaxMana();
-        float staminaRatio = remainingMovement / maxMovement;
-
-        float toggleX = sw - TOGGLE_W - TOGGLE_PAD;
-        float toggleY = TOGGLE_PAD;
-
-        float panelW = BTN_W + PANEL_PAD * 2;
-        float panelH = PANEL_PAD + actions.length * (BTN_H + BTN_GAP);
-        float panelX = sw - panelW - TOGGLE_PAD;
-        float panelY = toggleY + TOGGLE_H + 4f;
-
-        shapeRenderer.setProjectionMatrix(screen);
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-
-        // stat bars
-        drawBar(HP_Y,      hpRatio,      hpRatio < 0.3f ? HP_LOW : HP_FILL);
-        drawBar(MANA_Y,    manaRatio,    MANA_FILL);
-        drawBar(STAMINA_Y, staminaRatio, STAMINA_FILL);
-
-        // action panel background
-        if (panelOpen) {
-            shapeRenderer.setColor(PANEL_BG);
-            shapeRenderer.rect(panelX, panelY, panelW, panelH);
-
-            // action buttons
-            for (int i = 0; i < actions.length; i++) {
-                float bx = panelX + PANEL_PAD;
-                float by = panelY + PANEL_PAD + (actions.length - 1 - i) * (BTN_H + BTN_GAP);
-                boolean canAfford = stats.getMana() >= actions[i].manaCost;
-                boolean hovered   = (i == hoveredActionIndex);
-
-                if (!canAfford)     shapeRenderer.setColor(BTN_NOMANA);
-                else if (hovered)   shapeRenderer.setColor(BTN_HOVER);
-                else                shapeRenderer.setColor(BTN_BG);
-
-                shapeRenderer.rect(bx, by, BTN_W, BTN_H);
+    public void showFeedback(String message) { feedback = clean(message); feedbackTimer = 3f; }
+    public void showTargetingPrompt(AbilityType ability) {
+        targetingPrompt = ability.getDisplayName() + ": "
+            + (ability.getTargetType().targetsGround() ? "click a destination." : "click a highlighted player.");
+        feedbackTimer = 0;
+    }
+    public void clearTargetingPrompt() { targetingPrompt = ""; feedbackTimer = 0; }
+    public void recordState(MatchState state) {
+        round = state.getRoundNumber();
+        activeName = state.getPlayers().stream().filter(p -> p.getId() == state.getActivePlayerId())
+            .map(p -> p.getUsername() == null || p.getUsername().isBlank()
+                ? "Player " + (p.getId() + 1) : p.getUsername()).findFirst().orElse("Waiting for players");
+        // Only accepted server results enter the history, never targeting attempts/errors.
+        String message = clean(state.getMessage());
+        if (!message.isBlank()) {
+            history.add("R" + round + "  " + message);
+            if (history.size() > 100) history.remove(0);
+            logRows.clearChildren();
+            for (String line : history) {
+                Label entry = new Label(line, skin, "status");
+                entry.setWrap(true);
+                logRows.add(entry).width(312).left().padBottom(8).row();
             }
+            for (Actor actor : stage.getActors()) if (actor instanceof Table table) table.validate();
+            logScroll.validate();
+            logScroll.setScrollPercentY(1);
+            logScroll.updateVisualScroll();
         }
-
-        // toggle button
-        boolean toggleHovered = isToggleHovered(sw, sh);
-        shapeRenderer.setColor(toggleHovered ? TOGGLE_HOVER : TOGGLE_BG);
-        shapeRenderer.rect(toggleX, toggleY, TOGGLE_W, TOGGLE_H);
-
-        shapeRenderer.end();
-
-        // borders
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-
-        if (panelOpen) {
-            shapeRenderer.setColor(PANEL_BORDER);
-            shapeRenderer.rect(panelX, panelY, panelW, panelH);
-
-            for (int i = 0; i < actions.length; i++) {
-                float bx = panelX + PANEL_PAD;
-                float by = panelY + PANEL_PAD + (actions.length - 1 - i) * (BTN_H + BTN_GAP);
-                shapeRenderer.setColor(BTN_BORDER);
-                shapeRenderer.rect(bx, by, BTN_W, BTN_H);
-            }
+    }
+    public void render(Player player, float delta, boolean moving) {
+        feedbackTimer = Math.max(0, feedbackTimer - delta);
+        float maximum = player.getMovementController().getMaxMovementDistance();
+        float remaining = player.getMovementController().getRemainingMovementDistance();
+        hp.setValue(ratio(player.getStats().getHp(), player.getStats().getMaxHp()));
+        mana.setValue(ratio(player.getStats().getMana(), player.getStats().getMaxMana()));
+        stamina.setValue(ratio(remaining, maximum));
+        hpText.setText("HP  " + player.getStats().getHp() + " / " + player.getStats().getMaxHp());
+        manaText.setText("Mana  " + player.getStats().getMana() + " / " + player.getStats().getMaxMana());
+        staminaText.setText(String.format("Stamina  %.1f / %.1f", remaining, maximum));
+        apText.setText("Action point: " + player.getActionPoints() + " / 1");
+        turnText.setText(player.isActiveTurn() ? "YOUR TURN" : clean(activeName) + "'s turn");
+        turnText.setColor(player.isActiveTurn() ? FantasyUiTheme.GOLD : FantasyUiTheme.TEXT_PRIMARY);
+        roundText.setText("ROUND " + round + "  |  " + clean(activeName));
+        move.setDisabled(!interaction.canMove(player, moving));
+        action.setDisabled(!interaction.canAct(player, moving));
+        end.setDisabled(!interaction.canControl(player, moving));
+        cancel.setDisabled(interaction.mode() == BattleInteraction.Mode.NONE && targetingPrompt.isEmpty());
+        move.setColor(interaction.mode() == BattleInteraction.Mode.MOVE ? new Color(0.6f, 0.82f, 1, 1) : Color.WHITE);
+        action.setColor(interaction.mode() == BattleInteraction.Mode.ACTION ? FantasyUiTheme.GOLD : Color.WHITE);
+        boolean visible = interaction.mode() == BattleInteraction.Mode.ACTION && targetingPrompt.isEmpty();
+        if (visible != listVisible) {
+            abilityHost.clearChildren();
+            if (visible) abilityHost.add(abilityList).growX().padBottom(5);
+            listVisible = visible;
         }
-
-        shapeRenderer.setColor(TOGGLE_BORDER);
-        shapeRenderer.rect(toggleX, toggleY, TOGGLE_W, TOGGLE_H);
-
-        shapeRenderer.end();
-
-        // text
-        hudBatch.setProjectionMatrix(screen);
-        hudBatch.begin();
-
-        // stat labels
-        font.setColor(TEXT_COLOR);
-        font.draw(hudBatch, "HP:      " + stats.getHp() + " / " + stats.getMaxHp(),
-            BAR_X, HP_Y + LABEL_OFFSET);
-        font.draw(hudBatch, "Mana:  " + stats.getMana() + " / " + stats.getMaxMana(),
-            BAR_X, MANA_Y + LABEL_OFFSET);
-        font.draw(hudBatch,
-            "Stamina: " + String.format("%.2f", remainingMovement) + "/" + String.format("%.2f", maxMovement),
-            BAR_X, 60);
-
-        font.draw(hudBatch, "[E] End Turn", BAR_X, 18f);
-
-        // toggle button label
-        font.setColor(TEXT_COLOR);
-        String toggleLabel = panelOpen ? "X  Close" : "\u2694 Actions";
-        font.draw(hudBatch, toggleLabel, toggleX + 8f, toggleY + TOGGLE_H - 10f);
-
-        // action button labels
-        if (panelOpen) {
-            for (int i = 0; i < actions.length; i++) {
-                float bx = panelX + PANEL_PAD;
-                float by = panelY + PANEL_PAD + (actions.length - 1 - i) * (BTN_H + BTN_GAP);
-                ActionType action = actions[i];
-                boolean canAfford = stats.getMana() >= action.manaCost;
-
-                font.setColor(canAfford ? TEXT_COLOR : new Color(0.55f, 0.55f, 0.6f, 1f));
-                font.draw(hudBatch, action.displayName, bx + 8f, by + BTN_H - 10f);
-
-                font.setColor(canAfford ? MANA_TEXT : new Color(0.4f, 0.4f, 0.5f, 1f));
-                String cost = action.manaCost > 0 ? action.manaCost + " MP" : "Free";
-                font.draw(hudBatch, cost, bx + 8f, by + 14f);
-            }
+        for (int i = 0; i < abilities.size(); i++) {
+            AbilityType ability = abilities.get(i);
+            TextButton button = abilityButtons.get(i);
+            button.setDisabled(!interaction.canUse(player, moving, ability));
+            int cooldown = player.cooldownTurns(ability);
+            button.setText(ability.getDisplayName() + "   |   " + (cooldown > 0 ? "Cooldown: " + cooldown
+                : "1 AP" + (ability.getManaCost() > 0 ? " + " + ability.getManaCost() + " mana" : "")));
         }
-
-        // feedback message
-        if (feedbackTimer > 0f) {
-            font.setColor(FEEDBACK_COLOR.r, FEEDBACK_COLOR.g, FEEDBACK_COLOR.b,
-                Math.min(1f, feedbackTimer));
-            font.draw(hudBatch, feedbackMessage,
-                (sw - feedbackMessage.length() * 7f) / 2f, sh - 30f);
-        }
-
-        font.setColor(TEXT_COLOR);
-        hudBatch.end();
+        hint.setText(feedbackTimer > 0 ? feedback : !targetingPrompt.isEmpty() ? targetingPrompt
+            : interaction.awaitingServer() ? "Waiting for the server..."
+            : !player.isActiveTurn() ? "Waiting for " + clean(activeName) + "."
+            : moving ? "Moving..."
+            : interaction.mode() == BattleInteraction.Mode.MOVE ? "Click a blue area to move."
+            : visible ? "Choose an ability, then select its target."
+            : "Choose Move or Action to begin.");
+        viewport.apply();
+        stage.act(Math.min(delta, 1f / 15f));
+        stage.draw();
     }
-
-    // ──────────────────────────────────────────────────────────────
-    //  Helpers
-    // ──────────────────────────────────────────────────────────────
-
-    private void drawBar(float y, float ratio, Color fill) {
-        shapeRenderer.setColor(BAR_BG);
-        shapeRenderer.rect(BAR_X, y, BAR_W, BAR_H);
-        shapeRenderer.setColor(fill);
-        shapeRenderer.rect(BAR_X, y, BAR_W * Math.max(0f, ratio), BAR_H);
+    private static float ratio(float value, float max) { return max <= 0 ? 0 : Math.max(0, Math.min(1, value / max)); }
+    private static String clean(String value) {
+        return value == null ? "" : value.replace('\n', ' ').replace('\r', ' ')
+            .replace("\u2192", "->").replace('\u2014', '-').replace('\u2013', '-');
     }
-
-    private boolean isToggleHovered(int sw, int sh) {
-        float mx = com.badlogic.gdx.Gdx.input.getX() - viewport.getScreenX();
-        float my = sh - (com.badlogic.gdx.Gdx.input.getY() - viewport.getScreenY());
-        float tx = sw - TOGGLE_W - TOGGLE_PAD;
-        float ty = TOGGLE_PAD;
-        return mx >= tx && mx <= tx + TOGGLE_W && my >= ty && my <= ty + TOGGLE_H;
+    public void resize(int width, int height) {
+        viewport.setUnitsPerPixel(Math.max(1280f / Math.max(1, width), 720f / Math.max(1, height)) / HUD_SCALE);
+        viewport.update(width, height, true);
     }
-
-    @Override
-    public void dispose() {
-        hudBatch.dispose();
-        shapeRenderer.dispose();
-        font.dispose();
-    }
+    @Override public void dispose() { stage.dispose(); theme.dispose(); }
 }

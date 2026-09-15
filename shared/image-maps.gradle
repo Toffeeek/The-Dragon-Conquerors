@@ -1,0 +1,98 @@
+import groovy.transform.CompileStatic
+import java.awt.Color
+import java.awt.BasicStroke
+import java.awt.geom.Area
+import java.awt.geom.Path2D
+import java.awt.image.BufferedImage
+import javax.imageio.ImageIO
+import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Element
+
+/** Compile geometry once during the build; the headless server only reads bytes. */
+@CompileStatic
+class ImageMapCompiler {
+  static Area shapes(Element root, String tag) {
+    Area result = new Area()
+    def nodes = root.getElementsByTagName(tag)
+    for (int i = 0; i < nodes.length; i++) {
+      Element node = (Element) nodes.item(i)
+      Path2D.Double path = new Path2D.Double()
+      String[] points = node.getAttribute('points').trim().split('\\s+')
+      for (int p = 0; p < points.length; p++) {
+        String[] xy = points[p].split(',')
+        double x = Double.parseDouble(xy[0]), y = Double.parseDouble(xy[1])
+        if (p == 0) path.moveTo(x, y) else path.lineTo(x, y)
+      }
+      path.closePath()
+      result.add(new Area(path))
+    }
+    return result
+  }
+
+  static void compile(File assets, File output, File report, String name) {
+    def factory = DocumentBuilderFactory.newInstance()
+    factory.setFeature('http://apache.org/xml/features/disallow-doctype-decl', true)
+    Element root = factory.newDocumentBuilder().parse(new File(assets, name + '-collision.xml')).documentElement
+    BufferedImage image = ImageIO.read(new File(assets, name + '.png'))
+    int width = Integer.parseInt(root.getAttribute('width')), height = Integer.parseInt(root.getAttribute('height'))
+    if (image.width != width || image.height != height) throw new IllegalStateException('Image/collision dimensions differ: ' + name)
+    double worldX = Double.parseDouble(root.getAttribute('worldX'))
+    double worldWidth = Double.parseDouble(root.getAttribute('worldWidth'))
+    Area ground = shapes(root, 'ground'), solid = shapes(root, 'solid'), hazard = shapes(root, 'hazard')
+    Area burn = new Area()
+    def cracks = root.getElementsByTagName('crack')
+    for (int i = 0; i < cracks.length; i++) {
+      Element crack = (Element) cracks.item(i)
+      Path2D.Double path = new Path2D.Double()
+      String[] points = crack.getAttribute('points').trim().split('\\s+')
+      for (int p = 0; p < points.length; p++) {
+        String[] xy = points[p].split(',')
+        double x = Double.parseDouble(xy[0]), y = Double.parseDouble(xy[1])
+        if (p == 0) path.moveTo(x, y) else path.lineTo(x, y)
+      }
+      burn.add(new Area(new BasicStroke(8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND).createStrokedShape(path)))
+    }
+    ground.subtract(shapes(root, 'lava'))
+    ground.subtract(solid)
+    output.parentFile.mkdirs()
+    DataOutputStream data = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(output)))
+    try {
+      data.writeInt(480); data.writeInt(272)
+      for (int y = 0; y < 272; y++) for (int x = 0; x < 480; x++) {
+        double sx = ((x + 0.5) / 16 - worldX) * width / worldWidth
+        double sy = (y + 0.5) * height / 272
+        data.writeByte(solid.contains(sx, sy) ? 1 : ground.contains(sx, sy)
+          ? (burn.contains(sx, sy) ? 4 : hazard.contains(sx, sy) ? 3 : 0) : 2)
+      }
+    } finally { data.close() }
+    BufferedImage preview = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+    def graphics = preview.createGraphics()
+    graphics.drawImage(image, 0, 0, null)
+    graphics.setColor(new Color(40, 200, 255, 80)); graphics.fill(ground)
+    graphics.setColor(new Color(255, 40, 40, 120)); graphics.fill(solid)
+    Area toxic = new Area(hazard); toxic.intersect(ground)
+    graphics.setColor(new Color(200, 30, 255, 100)); graphics.fill(toxic)
+    burn.intersect(ground)
+    graphics.setColor(new Color(255, 220, 0, 200)); graphics.fill(burn)
+    graphics.dispose()
+    report.parentFile.mkdirs(); ImageIO.write(preview, 'png', report)
+  }
+}
+
+def imageMapDir = layout.buildDirectory.dir('generated/imageMaps')
+tasks.register('generateImageMaps') {
+  inputs.files(['map1', 'map2', 'map3'].collectMany { name -> [rootProject.file("assets/maps-new/${name}.png"), rootProject.file("assets/maps-new/${name}-collision.xml")] })
+  outputs.dir(imageMapDir)
+  outputs.files(['map1', 'map2', 'map3'].collect { name -> layout.buildDirectory.file("reports/${name}-collision.png") })
+  doLast {
+    ['map1', 'map2', 'map3'].each { name ->
+      ImageMapCompiler.compile(rootProject.file('assets/maps-new'),
+        imageMapDir.get().file("battlefields/${name}-mask.bin").asFile,
+        layout.buildDirectory.file("reports/${name}-collision.png").get().asFile, name)
+    }
+  }
+}
+processResources {
+  dependsOn tasks.named('generateImageMaps')
+  from(imageMapDir)
+}

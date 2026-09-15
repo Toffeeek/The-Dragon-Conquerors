@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/movement/MovementSystem.java
 package com.github.thedragonconquerors.movement;
 
 import com.badlogic.gdx.math.Vector2;
@@ -21,20 +22,54 @@ public class MovementSystem {
     private static final float ARRIVAL_THRESHOLD = 0.05f;   //minimum distance to target before snapping
     private NavGrid navGrid;
 
-    public void setDestination(Player player, Vector2 clickedWorldPos)
+    public boolean setDestination(Player player, Vector2 clickedWorldPos)
     {
-        if (navGrid == null) return;
+        if (navGrid == null) return false;
 
         float remaining = player.getMovementController().getRemainingMovementDistance();
         List<Vector2> path = navGrid.findPath(
             player.getPosition(), clickedWorldPos, remaining);
 
-        if (path.isEmpty()) return;
+        if (path.isEmpty()) return false;
 
         // Clamp path to remaining distance budget
         List<Vector2> clampedPath = clampPathToDistance(player.getPosition(), path, remaining);
+        if (clampedPath.isEmpty()) return false;
 
         player.getMovementController().setPath(clampedPath);
+        return true;
+    }
+
+    /** Returns the collision-checked, stamina-clamped destination without moving locally. */
+    public Vector2 previewDestination(Player player, Vector2 clickedWorldPos)
+    {
+        if (navGrid == null || player == null || clickedWorldPos == null) return null;
+        float remaining = player.getMovementController().getRemainingMovementDistance();
+        List<Vector2> path = navGrid.findPath(player.getPosition(), clickedWorldPos, remaining);
+        if (path.isEmpty()) return null;
+        List<Vector2> clamped = clampPathToDistance(player.getPosition(), path, remaining);
+        // Send the original intent: the server calculates and charges the whole route.
+        return clamped.isEmpty() ? null : new Vector2(clickedWorldPos);
+    }
+
+    public void setAuthoritativeDestination(Player player, Vector2 destination,
+                                            float remainingAfterMove)
+    {
+        if (player == null || destination == null) return;
+        if (navGrid == null) {
+            player.setPosition(destination.x, destination.y);
+            player.getMovementController().synchronizeRemainingDistance(remainingAfterMove);
+            return;
+        }
+        List<Vector2> path = navGrid.findPath(
+            player.getPosition(), destination, Float.MAX_VALUE);
+        if (path.isEmpty()) {
+            player.setPosition(destination.x, destination.y);
+            player.getMovementController().synchronizeRemainingDistance(remainingAfterMove);
+            return;
+        }
+        player.getMovementController().setAuthoritativePath(
+            player.getPosition(), path, remainingAfterMove);
     }
 
     public void setNetworkDestination(Player player, Vector2 destination)
@@ -83,7 +118,7 @@ public class MovementSystem {
         MovementController controller = player.getMovementController();
 
         if(!controller.isMoving())  return;
-        if(controller.getRemainingMovementDistance() <= 0){
+        if(!controller.isAuthoritativePath() && controller.getRemainingMovementDistance() <= 0){
             controller.stopMoving();
             return;
         }
@@ -100,7 +135,7 @@ public class MovementSystem {
         // Arrived at this waypoint — advance to next
         if (distToWaypoint <= ARRIVAL_THRESHOLD) {
             player.setPosition(nextWaypoint.x, nextWaypoint.y);
-            controller.deductDistance(distToWaypoint);
+            if (!controller.isAuthoritativePath()) controller.deductDistance(distToWaypoint);
             controller.advanceWaypoint();
             return;
         }
@@ -108,14 +143,14 @@ public class MovementSystem {
         // Move toward current waypoint
         float stepDistance = player.getSpeed() * delta;
         stepDistance = Math.min(stepDistance, distToWaypoint);
-        stepDistance = Math.min(stepDistance, controller.getRemainingMovementDistance());
+        if (!controller.isAuthoritativePath()) stepDistance = Math.min(stepDistance, controller.getRemainingMovementDistance());
 
         Vector2 dir = new Vector2(nextWaypoint).sub(currentPos).nor();
         player.setPosition(
             currentPos.x + dir.x * stepDistance,
             currentPos.y + dir.y * stepDistance
         );
-        controller.deductDistance(stepDistance);
+        if (!controller.isAuthoritativePath()) controller.deductDistance(stepDistance);
     }
 
 }

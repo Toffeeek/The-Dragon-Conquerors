@@ -35,3 +35,12 @@ dependencies {
 tasks.named('test') {
   useJUnitPlatform()
 }
+
+// This module is a library embedded by the libGDX client, not a standalone Boot app.
+tasks.named('bootJar') {
+  enabled = false
+}
+
+tasks.named('jar') {
+  enabled = true
+}

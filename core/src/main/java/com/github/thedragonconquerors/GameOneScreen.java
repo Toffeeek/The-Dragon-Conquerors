@@ -1,9 +1,14 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/GameOneScreen.java
 package com.github.thedragonconquerors;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture;
+import com.shared.shared.model.world.BattlefieldArtwork;
+import com.github.thedragonconquerors.assets.BattlefieldImageAssets;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.maps.tiled.TiledMap;
@@ -11,196 +16,208 @@ import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.Viewport;
+import com.badlogic.gdx.utils.viewport.StretchViewport;
+import com.github.thedragonconquerors.input.BattleInteraction;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
 import com.github.thedragonconquerors.assets.SpriteAssets;
-import com.github.thedragonconquerors.entities.CharacterClass;
 import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.input.MouseInputHandler;
 import com.github.thedragonconquerors.movement.MovementSystem;
 import com.github.thedragonconquerors.movement.NavGrid;
 import com.github.thedragonconquerors.rendering.HudRenderer;
 import com.github.thedragonconquerors.rendering.PlayerRenderer;
+import com.github.thedragonconquerors.rendering.BattlefieldOverlayRenderer;
 import com.shared.shared.model.Action;
+import com.shared.shared.model.CharacterBuild;
+import com.shared.shared.model.CharacterClass;
 import com.shared.shared.model.Packet;
+import com.shared.shared.model.Race;
+import com.shared.shared.model.ability.AbilitySlot;
+import com.shared.shared.model.ability.AbilityType;
+import com.shared.shared.model.ability.TargetType;
+import com.shared.shared.model.world.Environment;
+import com.shared.shared.model.world.BattlefieldDefinition;
+import com.shared.shared.network.MatchState;
+import com.shared.shared.network.PlayerCombatState;
 
-import com.github.thedragonconquerors.combat.ActionResult;
-import com.github.thedragonconquerors.combat.ActionSystem;
-import com.github.thedragonconquerors.combat.ActionType;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import static com.github.thedragonconquerors.assets.MapAssets.MAIN;
+public class GameOneScreen extends ScreenAdapter {
 
-public class GameOneScreen extends ScreenAdapter
-{
+    /**
+     * Class assumed for a remote player whose join packet carried no class.
+     *
+     * <p>Should not happen — the lobby always sends one — but a null class would
+     * NPE inside {@link Player}'s stat setup, so a mid-match join is rendered as
+     * a Paladin instead of dropping the player. If this ever fires it means the
+     * join packet lost its class in transit, which is worth investigating.</p>
+     */
+    private static final CharacterClass DEFAULT_REMOTE_CLASS = CharacterClass.PALADIN;
+
     private final Main game;
     private final Batch batch;
     private final AssetService assetService;
     private final Viewport viewport;
     private final OrthographicCamera camera;
+    private final NetworkClient networkClient;
+    private final int teamIndex;
+    private final CharacterBuild chosenBuild;
+    private final Environment environment;
+    private final List<Packet> initialRoster;
+    private final MatchState initialMatchState;
+    private final BattlefieldDefinition battlefield;
+
     private OrthogonalTiledMapRenderer mapRenderer;
+    private Texture battlefieldImage;
+    private BattlefieldOverlayRenderer battlefieldOverlay;
     private MovementSystem movementSystem;
     private NavGrid navGrid;
-
     private Player localPlayer;
-    private ArrayList<Player> enemyPlayers = new ArrayList<>();
+    private final ArrayList<Player> enemyPlayers = new ArrayList<>();
     private final Map<Integer, Player> playersById = new HashMap<>();
-    private int localPlayerId = -1;
+    private int localPlayerId;
     private boolean receivingInitialPlayerList = false;
+    private boolean postMatchShown;
 
     private PlayerRenderer playerRenderer;
     private MouseInputHandler mouseInputHandler;
     private HudRenderer hudRenderer;
+    private List<AbilityType> availableActions;
+    private final BattleInteraction interaction = new BattleInteraction();
+    private AbilityType pendingTargetAction;
 
-    private final NetworkClient networkClient;
-
-    private ActionSystem actionSystem;
-    private ActionType[] availableActions;
-    private boolean gameReady = false;  // true once class has been selected and game is set up
-
-    /**
-     * Sets up the camera and the packet handler to communicate with the server
-     */
-    public GameOneScreen(Main game)
-    {
+    public GameOneScreen(Main game, int teamIndex, CharacterBuild chosenBuild,
+                         Environment environment, int localPlayerId,
+                         List<Packet> initialRoster, MatchState initialMatchState) {
         this.networkClient = game.getNetworkClient();
+        this.teamIndex = teamIndex;
+        this.chosenBuild = chosenBuild;
+        this.environment = environment;
+        this.localPlayerId = localPlayerId;
+        this.initialRoster = initialRoster == null
+            ? new ArrayList<>() : new ArrayList<>(initialRoster);
+        this.initialMatchState = initialMatchState;
+        this.battlefield = BattlefieldDefinition.forEnvironment(environment);
         this.game = game;
         this.assetService = game.getAssetService();
-        this.viewport = game.getViewport();
-        this.camera = game.getCamera();
+        this.camera = new OrthographicCamera();
+        BattlefieldArtwork artwork = BattlefieldArtwork.forEnvironment(environment);
+        this.viewport = new StretchViewport(artwork == null ? Main.WORLD_WIDTH : artwork.width,
+            Main.WORLD_HEIGHT, camera);
         this.batch = game.getBatch();
-        this.networkClient.setPacketHandler(packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
-        this.enemyPlayers = new ArrayList<>();
+        this.networkClient.setPacketHandler(
+            packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
     }
 
-    /**
-     * Automatically called after the constructor, use this function to set up the starting positions /
-     * configurations of the game before launching the actual screen. Currently this function takes
-     * terminal input to figure out the starting positions of players.
-     */
     @Override
-    public void show()
-    {
-        // returning from CharacterSelectScreen — just restore input, don't re-run setup
-        if (gameReady) {
-            Gdx.input.setInputProcessor(mouseInputHandler);
-            return;
-        }
-
-        //build core system
+    public void show() {
         movementSystem = new MovementSystem();
-        actionSystem = new ActionSystem();
 
-        // Load map and sprites first (blocking)
-        TiledMap map = assetService.load(MAIN);
-        mapRenderer = new OrthogonalTiledMapRenderer(map, Main.UNIT_SCALE, batch);
-        navGrid = new NavGrid(map, Main.UNIT_SCALE, Main.WORLD_WIDTH, Main.WORLD_HEIGHT);
+        Packet localPacket = findInitialPlayer(localPlayerId);
+        float spawnX = teamIndex == 1 ? 1f : 28f;
+        Vector2 spawn = localPacket != null && localPacket.getFinalPosition() != null
+            ? new Vector2(localPacket.getFinalPosition()) : new Vector2(spawnX, 9f);
+        String username = localPacket != null && localPacket.getUsername() != null
+            ? localPacket.getUsername() : "Player";
+        spawnLocalPlayer(username, spawn, chosenBuild);
+        availableActions = AbilityType.forClass(chosenBuild.getCharacterClass());
+
+        TiledMap map = null;
+        BattlefieldImageAssets imageAsset = BattlefieldImageAssets.forEnvironment(environment);
+        if (imageAsset != null) {
+            battlefieldImage = assetService.load(imageAsset);
+            battlefieldImage.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        } else {
+            map = assetService.load(com.github.thedragonconquerors.assets.MapAssets.forEnvironment(environment));
+            mapRenderer = new OrthogonalTiledMapRenderer(map, Main.UNIT_SCALE, batch);
+        }
+        navGrid = new NavGrid(map, Main.UNIT_SCALE, Main.WORLD_WIDTH, Main.WORLD_HEIGHT,
+            battlefield);
         movementSystem.setNavGrid(navGrid);
+        battlefieldOverlay = new BattlefieldOverlayRenderer(battlefield);
 
         for (SpriteAssets sprite : SpriteAssets.values()) {
-            try { assetService.load(sprite); }
-            catch (Exception e) {
-                System.out.println("Sprite not found, skipping: " + sprite.name() + " (" + e.getMessage() + ")");
+            try {
+                assetService.load(sprite);
+            } catch (Exception exception) {
+                System.out.println("Sprite sheet could not be loaded: " + sprite.name()
+                    + " (" + exception.getMessage() + ")");
             }
         }
 
-        assetService.loadWalkAnimations();
-        playerRenderer = new PlayerRenderer(assetService);
-        hudRenderer = new HudRenderer(viewport);
-        hudRenderer.setOnActionSelected(this::executeAction);
+        playerRenderer = new PlayerRenderer(assetService, batch);
+        hudRenderer = new HudRenderer(availableActions, interaction, this::chooseMove,
+            this::chooseAction, this::selectAction, this::endTurn, this::cancelInteraction);
+        mouseInputHandler = new MouseInputHandler(
+            camera, viewport, localPlayer, movementSystem,
+            this::handleWorldClick, this::sendLocalMove);
+        Gdx.input.setInputProcessor(new InputMultiplexer(hudRenderer.stage(), mouseInputHandler));
 
-        // ── terminal team selection, then hand off to character select screen
-        Scanner scanner = new Scanner(System.in);
-        int teamIdx = 0;
-        while (teamIdx != 1 && teamIdx != 2) {
-            System.out.println("1. Blue \n2. Red");
-            System.out.print("Select team: ");
-            teamIdx = scanner.nextInt();
-            if (teamIdx != 1 && teamIdx != 2) System.out.println("Invalid team, please enter 1 or 2.");
+        for (Packet packet : initialRoster) {
+            if (packet.getID() != localPlayerId) receiveExistingPlayer(packet);
         }
-
-        final int chosenTeam = teamIdx;
-
-        // switch to character select screen; it calls back into this screen when done
-        game.setScreen(new CharacterSelectScreen(game, chosenTeam, (chosenClass) -> {
-            float spawnX = (chosenTeam == 1) ? 0 : 29;
-            spawnLocalPlayer(localPlayerId, "Name", spawnX, 9, chosenClass);
-            availableActions = ActionType.availableFor(chosenClass);
-
-            mouseInputHandler = new MouseInputHandler(camera, viewport, localPlayer, movementSystem, this::sendLocalMove);
-            mouseInputHandler.setHudContext(hudRenderer, availableActions, localPlayer.getStats());
-            gameReady = true;
-            Gdx.input.setInputProcessor(mouseInputHandler);
-
-            game.setScreen(GameOneScreen.this);
-        }));
+        receivingInitialPlayerList = false;
+        applyMatchState(initialMatchState);
     }
 
-    /**
-     * Manually called at the start of the game to add the local player at the map.
-     * @param characterClass the class the player selected before joining
-     */
-    private void spawnLocalPlayer(int localPlayerId, String username,
-                                  float worldX, float worldY,
-                                  CharacterClass characterClass)
-    {
-        receivingInitialPlayerList = true;
-
-        Vector2 startingPosition = new Vector2(worldX, worldY);
-        networkClient.join("local-player", new Vector2(worldX, worldY));
-        localPlayer = new Player(-1, username, worldX, worldY, characterClass);
+    private void spawnLocalPlayer(String username, Vector2 startingPosition,
+                                  CharacterBuild build) {
+        localPlayer = new Player(localPlayerId, username, startingPosition, build, teamIndex);
     }
 
-    /**
-     * LibGDX automatically calls this function repeatedly to render the current state of the screen.
-     * @param delta The time in seconds since the last render.
-     */
+    private Packet findInitialPlayer(int playerId) {
+        for (Packet packet : initialRoster) {
+            if (packet.getID() == playerId) return packet;
+        }
+        return null;
+    }
+
     @Override
-    public void render(float delta){
-        // not ready yet (still on character select screen)
-        if (localPlayer == null || hudRenderer == null) return;
-
-        //update player animation
-        movementSystem.update(localPlayer, delta);
-
-        for(Player enemy : enemyPlayers)
-        {
-            movementSystem.update(enemy, delta);
+    public void render(float delta) {
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            if (interaction.mode() != BattleInteraction.Mode.NONE || pendingTargetAction != null) {
+                cancelInteraction();
+            } else if (initialMatchState != null && initialMatchState.isTestingMode()) {
+                game.returnToMenu();
+                return;
+            }
         }
+        movementSystem.update(localPlayer, delta);
+        for (Player enemy : enemyPlayers) movementSystem.update(enemy, delta);
 
-        //handle end turn key
-        if(Gdx.input.isKeyJustPressed(Input.Keys.E))    endTurn();
-
-        // update action panel hover state
-        hudRenderer.updateHover(com.badlogic.gdx.Gdx.input.getX(), com.badlogic.gdx.Gdx.input.getY(), availableActions);
-
-        //clear screen
         ScreenUtils.clear(Color.BLACK);
-
         viewport.apply();
         batch.setColor(Color.WHITE);
-        mapRenderer.setView(this.camera);
-        mapRenderer.render();
+        if (battlefieldImage != null) {
+            BattlefieldArtwork artwork = BattlefieldArtwork.forEnvironment(environment);
+            batch.setProjectionMatrix(camera.combined);
+            batch.begin();
+            batch.draw(battlefieldImage, artwork.x, 0f, artwork.width, battlefield.getHeight());
+            batch.end();
+        } else {
+            mapRenderer.setView(camera);
+            mapRenderer.render();
+        }
+        battlefieldOverlay.render(camera.combined);
 
-        //render player
-        playerRenderer.render(localPlayer, camera.combined, navGrid, delta);
-        for(Player player : enemyPlayers)
-        {
-            playerRenderer.render(player, camera.combined);
+        playerRenderer.renderLocal(localPlayer, camera.combined, navGrid, delta,
+            interaction.mode() == BattleInteraction.Mode.MOVE && interaction.canMove(localPlayer, anyPlayerMoving()));
+        for (Player enemy : enemyPlayers) {
+            boolean selecting = pendingTargetAction != null && isLegalTarget(enemy, pendingTargetAction);
+            boolean inRange = selecting && localPlayer.getPosition().dst(enemy.getPosition())
+                <= pendingTargetAction.getRange();
+            playerRenderer.renderEnemy(enemy, camera.combined, delta, selecting, inRange);
         }
 
-        hudRenderer.render(localPlayer, delta);
+        hudRenderer.render(localPlayer, delta, anyPlayerMoving());
     }
 
-    /**
-     * VERY IMPORTANT: This function is automatically called by the application whenever a packet
-     * arrives from the server. The packet from the server is arrived in the form of the function parameter.
-     * Handle the packet from the server based on the 'action' field of the packet.
-     */
-    private void handlePacket(Packet packet)
-    {
-        switch(packet.getAction())
-        {
+    private void handlePacket(Packet packet) {
+        switch (packet.getAction()) {
             case PRIVATE_JOIN_CONFIRMATION:
                 localPlayerId = packet.getID();
                 System.out.println("My player ID is " + localPlayerId);
@@ -210,124 +227,403 @@ public class GameOneScreen extends ScreenAdapter
                 break;
             case EOF:
                 receivingInitialPlayerList = false;
-                System.out.println("Finished receiving existing players. Count: " + enemyPlayers.size());
+                System.out.println("Finished receiving existing players. Count: "
+                    + enemyPlayers.size());
                 break;
             case JOIN:
-                if(packet.getID() != localPlayerId && !playersById.containsKey(packet.getID()))
-                {
-                    Vector2 position = packet.getFinalPosition();
-                    if(position == null)    return;
-                    Player player = new Player
-                    (
-                        packet.getID(),
-                        packet.getUsername(),
-                        new Vector2(position)
-                    );
-                    enemyPlayers.add(player);
-                    playersById.put(packet.getID(), player);
-                    System.out.println("Enemy player " + packet.getID() + " joined at " + packet.getFinalPosition());
-                }
-                else
-                {
-                    System.out.println("Received my own join packet.. ignoring");
-                }
+                receiveJoin(packet);
                 break;
             case MOVE:
-                if(packet.getID() != localPlayerId)
-                {
-                    moveEnemyPlayer(packet);
-                }
+                if (packet.getID() != localPlayerId) moveEnemyPlayer(packet);
                 break;
             case LEAVE:
-                System.out.println("Game packet received: " + packet.getAction());
                 removeEnemyPlayer(packet.getID());
+                break;
+            case MATCH_STATE:
+                applyMatchState(packet.getMatchState());
+                break;
+            case ERROR:
+                interaction.receivedResponse();
+                if (hudRenderer != null) {
+                    hudRenderer.showFeedback(packet.getMessage() == null
+                        ? "The server rejected that command." : packet.getMessage());
+                }
                 break;
             default:
                 break;
         }
     }
 
-    private void moveEnemyPlayer(Packet packet)
-    {
-        Player enemyPlayer = playersById.get(packet.getID());
-        Vector2 destination = packet.getFinalPosition();
-        if(enemyPlayer == null || destination == null)
-        {
+    private void receiveJoin(Packet packet) {
+        if (isPendingLocalJoin(packet)) {
+            System.out.println("Received my own join packet before confirmation; ignoring.");
             return;
         }
+        if (packet.getID() == localPlayerId || playersById.containsKey(packet.getID())) return;
 
+        Vector2 position = packet.getFinalPosition();
+        if (position == null) return;
+        Player player = createRemotePlayer(packet, position);
+        enemyPlayers.add(player);
+        playersById.put(packet.getID(), player);
+    }
+
+    private void moveEnemyPlayer(Packet packet) {
+        Player enemyPlayer = playersById.get(packet.getID());
+        Vector2 destination = packet.getFinalPosition();
+        if (enemyPlayer == null || destination == null) return;
         movementSystem.setNetworkDestination(enemyPlayer, new Vector2(destination));
     }
 
-    private void sendLocalMove(Vector2 targetPos)
-    {
-        if(localPlayerId < 0)
-        {
-            System.out.println("Cannot send MOVE before server assigns local player ID.");
+    private void sendLocalMove(Vector2 targetPosition) {
+        if (interaction.mode() != BattleInteraction.Mode.MOVE || !interaction.canMove(localPlayer, anyPlayerMoving())) return;
+        if (localPlayerId < 0 || !localPlayer.isActiveTurn()) {
+            hudRenderer.showFeedback("Wait for your turn before moving.");
             return;
         }
-
-        Packet packet = Packet.builder()
-                .ID(localPlayerId)
-                .username("local-player")
-                .finalPosition(targetPos)
-                .action(Action.MOVE)
-                .build();
-
-        networkClient.send(packet);
+        if (anyPlayerMoving()) {
+            hudRenderer.showFeedback("Wait for the current movement animation to finish.");
+            return;
+        }
+        interaction.sentCommand();
+        networkClient.move(localPlayerId, targetPosition);
     }
 
-    private void receiveExistingPlayer(Packet packet)
-    {
+    private void receiveExistingPlayer(Packet packet) {
         Vector2 position = packet.getFinalPosition();
-        if(position == null)    return;
+        if (position == null || packet.getID() == localPlayerId
+            || playersById.containsKey(packet.getID())) return;
 
-        if(packet.getID() == localPlayerId || playersById.containsKey(packet.getID()))  return;
-
-        Player existingPlayer = new Player(packet.getID(), packet.getUsername(), new Vector2(position));
+        Player existingPlayer = createRemotePlayer(packet, position);
         enemyPlayers.add(existingPlayer);
         playersById.put(packet.getID(), existingPlayer);
 
-        if(receivingInitialPlayerList)  System.out.println("Received existingPlayer player " + packet.getID() + " at " + position.x + ", " + position.y);
+        if (receivingInitialPlayerList) {
+            System.out.println("Received existing player " + packet.getID()
+                + " at " + position.x + ", " + position.y);
+        }
     }
 
-    private void removeEnemyPlayer(int id)
-    {
+    private boolean isPendingLocalJoin(Packet packet) {
+        if (localPlayerId >= 0 || localPlayer == null
+            || packet.getFinalPosition() == null) return false;
+
+        return "local-player".equals(packet.getUsername())
+            && localPlayer.getPosition().epsilonEquals(packet.getFinalPosition(), 0.001f)
+            && packet.getCharacterClass() == chosenBuild.getCharacterClass();
+    }
+
+    private Player createRemotePlayer(Packet packet, Vector2 position) {
+        CharacterClass characterClass = packet.getCharacterClass() == null
+            ? DEFAULT_REMOTE_CLASS : packet.getCharacterClass();
+        Race race = packet.getRace() == null ? CharacterBuild.DEFAULT_RACE : packet.getRace();
+        return new Player(packet.getID(), packet.getUsername(), new Vector2(position),
+            CharacterBuild.of(race, characterClass), packet.getTeamIndex());
+    }
+
+    private void removeEnemyPlayer(int id) {
         Player enemy = playersById.remove(id);
-        if(enemy != null)   enemyPlayers.remove(enemy);
+        if (enemy != null) enemyPlayers.remove(enemy);
+        if (enemyPlayers.isEmpty()) cancelTargetSelection(false);
     }
 
-    private void executeAction(int index) {
-        if (availableActions == null || localPlayer == null) return;
-        if (index < 0 || index >= availableActions.length) return;
-        ActionType action = availableActions[index];
-        ActionResult result = actionSystem.execute(localPlayer, enemyPlayers, action);
-        hudRenderer.showFeedback(result);
-        System.out.println("[Action] " + result.message);
+    private void chooseMove() {
+        cancelTargetSelection(false);
+        interaction.chooseMove(localPlayer, anyPlayerMoving());
     }
 
-    //ends current turn and resets player stamina
-    private void endTurn()
-    {
-        localPlayer.onTurnStart();
-        System.out.println("Turn ended — movement distance reset.");
+    private void chooseAction() {
+        cancelTargetSelection(false);
+        interaction.chooseAction(localPlayer, anyPlayerMoving());
+    }
+
+    private void cancelInteraction() {
+        cancelTargetSelection(false);
+        interaction.cancel();
+    }
+
+    private void selectAction(AbilityType ability) {
+        if (interaction.mode() != BattleInteraction.Mode.ACTION
+            || !interaction.canUse(localPlayer, anyPlayerMoving(), ability)) return;
+        if (!localPlayer.isActiveTurn()) {
+            cancelTargetSelection(false);
+            hudRenderer.showFeedback("It is not your turn.");
+            return;
+        }
+        if (!localPlayer.isAlive()) {
+            cancelTargetSelection(false);
+            hudRenderer.showFeedback("A defeated player cannot act.");
+            return;
+        }
+        if (anyPlayerMoving()) {
+            hudRenderer.showFeedback("Wait for movement to finish before using an ability.");
+            return;
+        }
+        if (localPlayer.isActionUsed()) {
+            cancelTargetSelection(false);
+            hudRenderer.showFeedback("Your action is spent. You may still move or end the turn.");
+            return;
+        }
+        if (localPlayer.cooldownTurns(ability) > 0) {
+            cancelTargetSelection(false);
+            hudRenderer.showFeedback(ability.getDisplayName() + " is still recharging.");
+            return;
+        }
+        if (localPlayer.getStats().getMana() < ability.getManaCost()) {
+            cancelTargetSelection(false);
+            hudRenderer.showFeedback("Not enough mana for " + ability.getDisplayName() + ".");
+            return;
+        }
+        if (ability.getTargetType() == TargetType.SELF) {
+            cancelTargetSelection(false);
+            sendAbility(ability, localPlayer, null);
+            return;
+        }
+        if (!ability.getTargetType().targetsGround() && !hasAnyLegalTarget(ability)) {
+            cancelTargetSelection(false);
+            hudRenderer.showFeedback("No legal target is available for "
+                + ability.getDisplayName() + ".");
+            return;
+        }
+        pendingTargetAction = ability;
+        hudRenderer.showTargetingPrompt(ability);
+        hudRenderer.showFeedback(ability.getTargetType().targetsGround()
+            ? "Click a tile on the battlefield." : "Click a highlighted player.");
+    }
+
+    /** Returns true while targeting so the click is not also interpreted as movement. */
+    private boolean handleWorldClick(Vector2 clickedWorldPosition) {
+        if (!interaction.canControl(localPlayer, anyPlayerMoving())) return true;
+        if (pendingTargetAction == null) {
+            if (interaction.mode() != BattleInteraction.Mode.MOVE) return true;
+            // Stay in Move mode when a destination has no safe route.
+            if (movementSystem.previewDestination(localPlayer, clickedWorldPosition) == null) {
+                hudRenderer.showFeedback("Choose a reachable blue area with a safe route.");
+                return true;
+            }
+            return false;
+        }
+
+        AbilityType ability = pendingTargetAction;
+        if (ability.getTargetType().targetsGround()) {
+            float distance = localPlayer.getPosition().dst(clickedWorldPosition);
+            if (distance > ability.getRange()) {
+                hudRenderer.showFeedback("Target is out of range ("
+                    + String.format("%.1f", distance) + "/"
+                    + String.format("%.1f", ability.getRange()) + ").");
+                return true;
+            }
+            cancelTargetSelection(false);
+            sendAbility(ability, null, clickedWorldPosition);
+            return true;
+        }
+
+        Player selectedTarget = findClickedTarget(clickedWorldPosition, ability);
+        if (selectedTarget == null) {
+            hudRenderer.showFeedback("Click directly on a highlighted player.");
+            return true;
+        }
+        float targetDistance = localPlayer.getPosition().dst(selectedTarget.getPosition());
+        if (targetDistance > ability.getRange()) {
+            hudRenderer.showFeedback("Target is out of range ("
+                + String.format("%.1f", targetDistance) + "/"
+                + String.format("%.1f", ability.getRange()) + ").");
+            return true;
+        }
+        cancelTargetSelection(false);
+        sendAbility(ability, selectedTarget, null);
+        return true;
+    }
+
+    private Player findClickedTarget(Vector2 clickedWorldPosition, AbilityType ability) {
+        Player best = null;
+        float bestDistance = PlayerRenderer.TARGET_CLICK_RADIUS;
+        if (isLegalTarget(localPlayer, ability)) {
+            float localDistance = localPlayer.getPosition().dst(clickedWorldPosition);
+            if (localDistance <= bestDistance) {
+                best = localPlayer;
+                bestDistance = localDistance;
+            }
+        }
+        for (Player enemy : enemyPlayers) {
+            if (!isLegalTarget(enemy, ability)) continue;
+            float distance = enemy.getPosition().dst(clickedWorldPosition);
+            if (distance <= bestDistance) {
+                best = enemy;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
+    private boolean hasAnyLegalTarget(AbilityType ability) {
+        if (isLegalTarget(localPlayer, ability)) return true;
+        for (Player player : enemyPlayers) {
+            if (isLegalTarget(player, ability)) return true;
+        }
+        return false;
+    }
+
+    private boolean isLegalTarget(Player target, AbilityType ability) {
+        if (target == null || ability == null) return false;
+        switch (ability.getTargetType()) {
+            case ALLY:
+                return target.getTeamIndex() == localPlayer.getTeamIndex() && target.isAlive();
+            case DOWNED_ALLY:
+                return target.getTeamIndex() == localPlayer.getTeamIndex() && target.isDowned();
+            case ENEMY:
+                return target.getTeamIndex() != localPlayer.getTeamIndex() && target.isAlive();
+            default:
+                return false;
+        }
+    }
+
+    private void sendAbility(AbilityType ability, Player target, Vector2 point) {
+        if (!interaction.canUse(localPlayer, anyPlayerMoving(), ability)) return;
+        int targetId = target == null ? -1 : target.getId();
+        interaction.sentCommand();
+        networkClient.useAbility(localPlayerId, ability, targetId, point);
+        hudRenderer.showFeedback("Waiting for server: " + ability.getDisplayName());
+    }
+
+    private void applyMatchState(MatchState state) {
+        if (state == null || localPlayer == null) return;
+        interaction.reset();
+        cancelTargetSelection(false);
+
+        Map<Integer, PlayerCombatState> incoming = new HashMap<>();
+        Map<Integer, Integer> previousHp = new HashMap<>();
+        for (PlayerCombatState playerState : state.getPlayers()) {
+            incoming.put(playerState.getId(), playerState);
+            Player player = playerState.getId() == localPlayerId
+                ? localPlayer : playersById.get(playerState.getId());
+            if (player == null) {
+                player = createRemotePlayer(playerState);
+                enemyPlayers.add(player);
+                playersById.put(player.getId(), player);
+            }
+
+            previousHp.put(player.getId(), player.getStats().getHp());
+            long previousMovement = player.getMovementSequence();
+            Vector2 authoritativePosition = playerState.getPosition();
+            player.applyCombatState(playerState);
+            if (authoritativePosition != null && previousMovement != playerState.getMovementSequence()) {
+                if (previousMovement < 0 || playerState.getMovementPath() == null || playerState.getMovementPath().isEmpty()) {
+                    player.getMovementController().stopMoving();
+                    player.setPosition(authoritativePosition.x, authoritativePosition.y);
+                } else {
+                    player.getMovementController().setAuthoritativePath(player.getPosition(),
+                        playerState.getMovementPath(), playerState.getRemainingMovement());
+                }
+            }
+        }
+
+        for (Player player : new ArrayList<>(enemyPlayers)) {
+            if (!incoming.containsKey(player.getId())) removeEnemyPlayer(player.getId());
+        }
+        if (navGrid != null) {
+            List<Vector2> occupied = state.getPlayers().stream()
+                .filter(other -> other.getId() != localPlayerId && other.getHp() > 0)
+                .map(PlayerCombatState::getPosition).filter(java.util.Objects::nonNull).toList();
+            navGrid.setOccupied(occupied);
+        }
+
+        Player actor = state.getLastActorId() == localPlayerId
+            ? localPlayer : playersById.get(state.getLastActorId());
+        Player firstDamaged = null;
+        for (PlayerCombatState playerState : state.getPlayers()) {
+            Player player = playerState.getId() == localPlayerId
+                ? localPlayer : playersById.get(playerState.getId());
+            int before = previousHp.getOrDefault(playerState.getId(), playerState.getHp());
+            if (player != null && playerState.getHp() < before) {
+                if (firstDamaged == null) firstDamaged = player;
+                if (playerState.getHp() <= 0) player.getAnimationController().playDeath();
+                else if (actor != null) player.getAnimationController().playHurt(
+                    actor.getPosition(), player.getPosition());
+            }
+        }
+
+        if (actor != null && state.getLastAbility() != null) {
+            Vector2 target = firstDamaged == null
+                ? new Vector2(actor.getPosition()).add(0f, 1f) : firstDamaged.getPosition();
+            actor.getAnimationController().playAttack(actor.getPosition(), target,
+                state.getLastAbility().getSlot() != AbilitySlot.PRIMARY);
+        }
+
+        boolean localTurn = !state.isMatchOver() && state.getActivePlayerId() == localPlayerId;
+        if (mouseInputHandler != null) mouseInputHandler.setLocalPlayerTurn(localTurn);
+        if (!localTurn) cancelTargetSelection(false);
+        if (hudRenderer != null) {
+            hudRenderer.recordState(state);
+        }
+        if (state.isMatchOver() && hudRenderer != null) {
+            String result = state.getWinningTeam() == 0 ? "Match ended in a draw."
+                : state.getWinningTeam() == teamIndex ? "Your team wins!" : "Your team was defeated.";
+            hudRenderer.showFeedback(result);
+            if (!postMatchShown) {
+                postMatchShown = true;
+                Gdx.app.postRunnable(() -> game.showPostMatch(teamIndex, chosenBuild,
+                    environment, localPlayerId, state));
+            }
+        }
+    }
+
+    private Player createRemotePlayer(PlayerCombatState state) {
+        CharacterClass characterClass = state.getCharacterClass() == null
+            ? DEFAULT_REMOTE_CLASS : state.getCharacterClass();
+        Race race = state.getRace() == null ? CharacterBuild.DEFAULT_RACE : state.getRace();
+        Vector2 position = state.getPosition() == null ? new Vector2() : state.getPosition();
+        return new Player(state.getId(), state.getUsername(), new Vector2(position),
+            CharacterBuild.of(race, characterClass), state.getTeamIndex());
+    }
+
+    private void cancelTargetSelection(boolean showMessage) {
+        pendingTargetAction = null;
+        if (hudRenderer != null) {
+            hudRenderer.clearTargetingPrompt();
+            if (showMessage) hudRenderer.showFeedback("Target selection cancelled.");
+        }
+    }
+
+    private void endTurn() {
+        if (!interaction.canControl(localPlayer, anyPlayerMoving())) return;
+        cancelTargetSelection(false);
+        if (!localPlayer.isActiveTurn()) {
+            hudRenderer.showFeedback("It is not your turn.");
+            return;
+        }
+        if (anyPlayerMoving()) {
+            hudRenderer.showFeedback("Wait for movement to finish before ending the turn.");
+            return;
+        }
+        interaction.sentCommand();
+        networkClient.endTurn(localPlayerId);
+    }
+
+    private boolean anyPlayerMoving() {
+        return localPlayer.getMovementController().isMoving()
+            || enemyPlayers.stream().anyMatch(player -> player.getMovementController().isMoving());
     }
 
     @Override
-    public void resize(int width, int height)
-    {
+    public void resize(int width, int height) {
         viewport.update(width, height, true);
+        BattlefieldArtwork artwork = BattlefieldArtwork.forEnvironment(environment);
+        if (artwork != null) camera.position.x = artwork.x + artwork.width / 2f;
+        camera.update();
+        if (hudRenderer != null) hudRenderer.resize(width, height);
     }
 
     @Override
-    public void hide(){
+    public void hide() {
         Gdx.input.setInputProcessor(null);
     }
 
     @Override
     public void dispose() {
-        playerRenderer.dispose();
-        mapRenderer.dispose();
-        hudRenderer.dispose();
+        if (playerRenderer != null) playerRenderer.dispose();
+        if (mapRenderer != null) mapRenderer.dispose();
+        if (hudRenderer != null) hudRenderer.dispose();
+        if (battlefieldOverlay != null) battlefieldOverlay.dispose();
     }
 }

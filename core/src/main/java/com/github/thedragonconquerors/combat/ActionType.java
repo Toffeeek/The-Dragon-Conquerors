@@ -1,6 +1,6 @@
 package com.github.thedragonconquerors.combat;
 
-import com.github.thedragonconquerors.entities.CharacterClass;
+import com.shared.shared.model.CharacterClass;
 
 /**
  * Every action a player can perform during their turn.
@@ -11,6 +11,7 @@ import com.github.thedragonconquerors.entities.CharacterClass;
  *   baseDamage   — raw damage before stat scaling
  *   range        — max world-unit distance to target
  *   targetsSelf  — true for heals/buffs (no enemy needed)
+ *   animation    — sprite-sheet animation triggered by the action
  *   description  — tooltip line shown on the HUD
  *
  * Adding a new action:
@@ -22,33 +23,33 @@ public enum ActionType {
 
     // ── universal ──────────────────────────────────────────────────────────
     //                     name            mana  dmg  range  self   description
-    BASIC_ATTACK       ("Basic Attack",     0,   10,  1.5f, false, "Strike a nearby enemy"),
-    DEFEND             ("Defend",           0,    0,  0f,   true,  "Brace — reduce incoming damage this turn"),
+    BASIC_ATTACK       ("Basic Attack",     0,   10,  1.5f, false, ActionAnimation.ATTACK, "Strike a nearby enemy"),
+    DEFEND             ("Defend",           0,    0,  0f,   true,  ActionAnimation.CAST, "Brace — reduce incoming damage this turn"),
 
     // ── Warrior ───────────────────────────────────────────────────────────
-    SHIELD_BASH        ("Shield Bash",      8,   14,  1.5f, false, "Bash enemy — deals bonus damage"),
-    WAR_CRY            ("War Cry",         12,    0,  0f,   true,  "Boost strength for 1 turn"),
-    CLEAVE             ("Cleave",          15,   20,  2.0f, false, "Wide swing hitting all nearby enemies"),
+    SHIELD_BASH        ("Shield Bash",      8,   14,  1.5f, false, ActionAnimation.ATTACK, "Bash enemy — deals bonus damage"),
+    WAR_CRY            ("War Cry",         12,    0,  0f,   true,  ActionAnimation.CAST, "Boost strength for 1 turn"),
+    CLEAVE             ("Cleave",          15,   20,  2.0f, false, ActionAnimation.ATTACK, "Wide swing hitting all nearby enemies"),
 
     // ── Mage ──────────────────────────────────────────────────────────────
-    FIREBALL           ("Fireball",        20,   30,  5.0f, false, "Launch a fireball at a distant enemy"),
-    ICE_SHARD          ("Ice Shard",       12,   18,  4.0f, false, "Slow and damage a target"),
-    ARCANE_SHIELD      ("Arcane Shield",   15,    0,  0f,   true,  "Absorb the next hit with a mana barrier"),
+    FIREBALL           ("Fireball",        20,   30,  5.0f, false, ActionAnimation.CAST, "Launch a fireball at a distant enemy"),
+    ICE_SHARD          ("Ice Shard",       12,   18,  4.0f, false, ActionAnimation.CAST, "Slow and damage a target"),
+    ARCANE_SHIELD      ("Arcane Shield",   15,    0,  0f,   true,  ActionAnimation.CAST, "Absorb the next hit with a mana barrier"),
 
     // ── Archer ────────────────────────────────────────────────────────────
-    ARROW_SHOT         ("Arrow Shot",       5,   15,  6.0f, false, "Fire an arrow at a distant enemy"),
-    POISON_ARROW       ("Poison Arrow",    10,   10,  5.0f, false, "Arrow that poisons target over time"),
-    EVASIVE_ROLL       ("Evasive Roll",     8,    0,  0f,   true,  "Greatly boost evasion for 1 turn"),
+    ARROW_SHOT         ("Arrow Shot",       5,   15,  6.0f, false, ActionAnimation.ATTACK, "Fire an arrow at a distant enemy"),
+    POISON_ARROW       ("Poison Arrow",    10,   10,  5.0f, false, ActionAnimation.ATTACK, "Arrow that poisons target over time"),
+    EVASIVE_ROLL       ("Evasive Roll",     8,    0,  0f,   true,  ActionAnimation.CAST, "Greatly boost evasion for 1 turn"),
 
     // ── Paladin ───────────────────────────────────────────────────────────
-    HOLY_STRIKE        ("Holy Strike",     10,   18,  1.5f, false, "Blessed strike — bonus vs undead"),
-    LAY_ON_HANDS       ("Lay on Hands",   20,    0,  0f,   true,  "Restore 30 HP to yourself"),
-    DIVINE_SHIELD      ("Divine Shield",  25,    0,  0f,   true,  "Become immune to damage for 1 turn"),
+    HOLY_STRIKE        ("Holy Strike",     10,   18,  1.5f, false, ActionAnimation.ATTACK, "Blessed strike — bonus vs undead"),
+    LAY_ON_HANDS       ("Lay on Hands",   20,    0,  0f,   true,  ActionAnimation.CAST, "Restore 30 HP to yourself"),
+    DIVINE_SHIELD      ("Divine Shield",  25,    0,  0f,   true,  ActionAnimation.CAST, "Become immune to damage for 1 turn"),
 
     // ── Rogue ─────────────────────────────────────────────────────────────
-    BACKSTAB           ("Backstab",        10,   25,  1.5f, false, "High damage if attacking from behind"),
-    SMOKE_BOMB         ("Smoke Bomb",      12,    0,  0f,   true,  "Become untargetable for 1 turn"),
-    DUAL_SLASH         ("Dual Slash",      15,   18,  1.5f, false, "Two quick strikes in succession");
+    BACKSTAB           ("Backstab",        10,   25,  1.5f, false, ActionAnimation.ATTACK, "High damage if attacking from behind"),
+    SMOKE_BOMB         ("Smoke Bomb",      12,    0,  0f,   true,  ActionAnimation.CAST, "Become untargetable for 1 turn"),
+    DUAL_SLASH         ("Dual Slash",      15,   18,  1.5f, false, ActionAnimation.ATTACK, "Two quick strikes in succession");
 
     // ──────────────────────────────────────────────────────────────────────
     //  Fields
@@ -59,15 +60,17 @@ public enum ActionType {
     public final int     baseDamage;
     public final float   range;
     public final boolean targetsSelf;
+    public final ActionAnimation animation;
     public final String  description;
 
     ActionType(String displayName, int manaCost, int baseDamage,
-               float range, boolean targetsSelf, String description) {
+               float range, boolean targetsSelf, ActionAnimation animation, String description) {
         this.displayName  = displayName;
         this.manaCost     = manaCost;
         this.baseDamage   = baseDamage;
         this.range        = range;
         this.targetsSelf  = targetsSelf;
+        this.animation    = animation;
         this.description  = description;
     }
 
@@ -79,14 +82,31 @@ public enum ActionType {
      * Returns the ordered list of actions available to a given class.
      * Slot 0 = key [1], slot 1 = key [2], etc.
      * Always starts with BASIC_ATTACK so every class has a free attack.
+     *
+     * <p><b>PROVISIONAL MAPPING.</b> This enum predates the design document's
+     * roster and its actions do not match it: there is no Curse, Poison Jab,
+     * Teleport, Heal, Revive, Battle Focus, Vanguard Assault or Rain of Arrows here,
+     * and nothing in this package applies status effects, cooldowns or area
+     * damage. The authoritative catalogue is
+     * {@code com.shared.shared.model.ability.AbilityType}, which already
+     * describes all twenty design abilities as data.</p>
+     *
+     * <p>The mapping below exists only so the client keeps a working action bar
+     * until {@code CombatResolver} lands and this package is retired. Wraith
+     * inherits the old Rogue kit, Cleric the old self-heal, Soldier a direct frontline kit —
+     * placeholders, not balance decisions. Do not tune these numbers; tune
+     * {@code AbilityType} instead.</p>
      */
     public static ActionType[] availableFor(CharacterClass cls) {
+        if (cls == null) return new ActionType[]{ BASIC_ATTACK, DEFEND };
         switch (cls) {
-            case WARRIOR: return new ActionType[]{ BASIC_ATTACK, SHIELD_BASH, WAR_CRY,       CLEAVE       };
+            case PALADIN: return new ActionType[]{ BASIC_ATTACK, HOLY_STRIKE, LAY_ON_HANDS,  DIVINE_SHIELD};
             case MAGE:    return new ActionType[]{ BASIC_ATTACK, FIREBALL,    ICE_SHARD,     ARCANE_SHIELD};
             case ARCHER:  return new ActionType[]{ BASIC_ATTACK, ARROW_SHOT,  POISON_ARROW,  EVASIVE_ROLL };
-            case PALADIN: return new ActionType[]{ BASIC_ATTACK, HOLY_STRIKE, LAY_ON_HANDS,  DIVINE_SHIELD};
-            case ROGUE:   return new ActionType[]{ BASIC_ATTACK, BACKSTAB,    DUAL_SLASH,    SMOKE_BOMB   };
+            // Placeholder kits — see the note above.
+            case WRAITH:  return new ActionType[]{ BASIC_ATTACK, BACKSTAB,    DUAL_SLASH,    SMOKE_BOMB   };
+            case CLERIC:  return new ActionType[]{ BASIC_ATTACK, SHIELD_BASH, LAY_ON_HANDS,  DEFEND       };
+            case SOLDIER: return new ActionType[]{ BASIC_ATTACK, SHIELD_BASH, WAR_CRY,         CLEAVE       };
             default:      return new ActionType[]{ BASIC_ATTACK, DEFEND };
         }
     }

@@ -1,3 +1,4 @@
+// File Location: core/src/main/java/com/github/thedragonconquerors/Main.java
 package com.github.thedragonconquerors;
 
 import com.badlogic.gdx.Application;
@@ -15,17 +16,37 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.client.client.NetworkClient;
 import com.github.thedragonconquerors.assets.AssetService;
+import com.shared.shared.model.CharacterBuild;
 import com.shared.shared.model.Packet;
+import com.shared.shared.model.world.Environment;
+import com.shared.shared.network.MatchState;
 import lombok.Getter;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.Inet4Address;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
+import java.time.Duration;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 /** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms.
  *  The first class made after the application is launched. Acts as the entry point.
  * */
 public class Main extends Game
 {
+    public static final String DEFAULT_SERVER_URL = "ws://localhost:8080/ws";
+    public static final int SERVER_PORT = 8080;
     public static final float WORLD_WIDTH = 30f;
     public static final float WORLD_HEIGHT = 17f;
     public static final float UNIT_SCALE = 1f/16f;
@@ -43,6 +64,11 @@ public class Main extends Game
 
     private GLProfiler glProfiler;
     private FPSLogger fpsLogger;
+    private Process serverProcess;
+    private Thread serverShutdownHook;
+    private int localServerPort = SERVER_PORT;
+    @Getter
+    private String hostedJoinUrl = DEFAULT_SERVER_URL;
 
     private final Map<Class<? extends Screen>, Screen> screenCache = new HashMap<>();
 
@@ -64,25 +90,252 @@ public class Main extends Game
         this.glProfiler.enable();
         this.fpsLogger = new FPSLogger();
 
-        setupNetworkClient();
+        serverShutdownHook = new Thread(this::stopLocalServer, "tdc-server-shutdown");
+        Runtime.getRuntime().addShutdownHook(serverShutdownHook);
 
-        addScreen(new GameOneScreen(this));
-        setScreen(GameOneScreen.class);
+        addScreen(new MenuScreen(this));
+        setScreen(MenuScreen.class);
     }
 
     /**
      * Sets up the means to communicate with the server via the networkClient object
      */
-    private void setupNetworkClient()
+    public NetworkClient connectToServer(String url) throws Exception
+    {
+        NetworkClient client = new NetworkClient(url);
+        client.setPacketHandler(packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
+        client.connect();
+        return client;
+    }
+
+    public void startLobby(NetworkClient networkClient, String joinUrl)
+    {
+        this.networkClient = networkClient;
+        this.hostedJoinUrl = joinUrl;
+        addScreen(new LobbyScreen(this, joinUrl));
+        setScreen(LobbyScreen.class);
+    }
+
+    public void startGame(int teamIndex, CharacterBuild chosenBuild,
+                          Environment environment, int localPlayerId,
+                          List<Packet> roster, MatchState initialState)
+    {
+        addScreen(new GameOneScreen(this, teamIndex, chosenBuild, environment,
+            localPlayerId, roster, initialState));
+        setScreen(GameOneScreen.class);
+    }
+
+    public void showPostMatch(int teamIndex, CharacterBuild chosenBuild,
+                              Environment environment, int localPlayerId,
+                              MatchState finalState)
+    {
+        addScreen(new PostMatchScreen(this, teamIndex, chosenBuild, environment,
+            localPlayerId, finalState));
+        setScreen(PostMatchScreen.class);
+    }
+
+    /** Disconnects the current client, stops a locally hosted server, and returns to the cached menu. */
+    public void returnToMenu()
+    {
+        if(networkClient != null)
+        {
+            try
+            {
+                networkClient.disconnect();
+            }
+            finally
+            {
+                networkClient = null;
+            }
+        }
+
+        stopLocalServer();
+        hostedJoinUrl = DEFAULT_SERVER_URL;
+        setScreen(MenuScreen.class);
+    }
+
+    public boolean startLocalServer() throws IOException
+    {
+        if(serverProcess != null && serverProcess.isAlive()) return false;
+
+        File rootDir = findProjectRoot();
+        // Launch the wrapper with Java directly: Windows does not resolve a bare
+        // gradlew.bat against ProcessBuilder.directory(), especially in spaced paths.
+        String javaName = System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java";
+        File javaExecutable = new File(System.getProperty("java.home"), "bin/" + javaName);
+        File wrapperJar = new File(rootDir, "gradle/wrapper/gradle-wrapper.jar");
+        localServerPort = findAvailablePort();
+
+        ProcessBuilder processBuilder = new ProcessBuilder(
+            javaExecutable.getAbsolutePath(),
+            "-Dorg.gradle.appname=gradlew",
+            "-jar", wrapperJar.getAbsolutePath(),
+            ":server:bootRun",
+            "--args=--server.port=" + localServerPort
+        );
+        processBuilder.directory(rootDir);
+        processBuilder.redirectErrorStream(true);
+        serverProcess = processBuilder.start();
+
+        Thread logThread = new Thread(() -> consumeServerOutput(serverProcess), "tdc-server-output");
+        logThread.setDaemon(true);
+        logThread.start();
+        return true;
+    }
+
+    public boolean waitForLocalServer(Duration timeout)
+    {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while(System.nanoTime() < deadline)
+        {
+            if(serverProcess != null && !serverProcess.isAlive()) return false;
+
+            try(Socket socket = new Socket())
+            {
+                socket.connect(new InetSocketAddress("localhost", localServerPort), 250);
+                return true;
+            }
+            catch(IOException ignored)
+            {
+                try
+                {
+                    Thread.sleep(250L);
+                }
+                catch(InterruptedException e)
+                {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public void stopLocalServer()
+    {
+        Process process = serverProcess;
+        if(process == null) return;
+
+        ProcessHandle processHandle = process.toHandle();
+        processHandle.descendants()
+            .sorted(Comparator.comparing(ProcessHandle::pid).reversed())
+            .forEach(ProcessHandle::destroy);
+        processHandle.destroy();
+
+        waitForExit(process, Duration.ofSeconds(3));
+
+        processHandle.descendants()
+            .sorted(Comparator.comparing(ProcessHandle::pid).reversed())
+            .forEach(ProcessHandle::destroyForcibly);
+        if(processHandle.isAlive()) processHandle.destroyForcibly();
+
+        waitForExit(process, Duration.ofSeconds(2));
+        serverProcess = null;
+        localServerPort = SERVER_PORT;
+        hostedJoinUrl = DEFAULT_SERVER_URL;
+    }
+
+    private void waitForExit(Process process, Duration timeout)
     {
         try
         {
-            this.networkClient = new NetworkClient("ws://localhost:8080/ws");
-            this.networkClient.setPacketHandler(packet -> Gdx.app.postRunnable(() -> handlePacket(packet)));
-            this.networkClient.connect();
+            process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
         }
-        catch (Exception e) {
-            throw new RuntimeException("Failed to connect to server", e);
+        catch(InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    public String getLocalJoinUrl()
+    {
+        return getLanAddress()
+            .map(address -> "ws://" + address + ":" + localServerPort + "/ws")
+            .orElse(getLocalServerUrl());
+    }
+
+    public String getLocalServerUrl()
+    {
+        return "ws://localhost:" + localServerPort + "/ws";
+    }
+
+    private int findAvailablePort() throws IOException
+    {
+        try(ServerSocket socket = new ServerSocket(SERVER_PORT))
+        {
+            socket.setReuseAddress(true);
+            return SERVER_PORT;
+        }
+        catch(IOException ignored)
+        {
+            // Fall back to a random free port when the default server port is in use.
+        }
+
+        try(ServerSocket socket = new ServerSocket(0))
+        {
+            socket.setReuseAddress(true);
+            return socket.getLocalPort();
+        }
+    }
+
+    private Optional<String> getLanAddress()
+    {
+        try
+        {
+            var interfaces = NetworkInterface.getNetworkInterfaces();
+            while(interfaces.hasMoreElements())
+            {
+                NetworkInterface networkInterface = interfaces.nextElement();
+                if(!networkInterface.isUp() || networkInterface.isLoopback() || networkInterface.isVirtual()) continue;
+
+                var addresses = networkInterface.getInetAddresses();
+                while(addresses.hasMoreElements())
+                {
+                    var address = addresses.nextElement();
+                    if(address instanceof Inet4Address && !address.isLoopbackAddress())
+                    {
+                        return Optional.of(address.getHostAddress());
+                    }
+                }
+            }
+        }
+        catch(SocketException e)
+        {
+            System.out.println("Could not detect LAN address: " + e.getMessage());
+        }
+
+        return Optional.empty();
+    }
+
+    private File findProjectRoot() throws IOException
+    {
+        File current = new File(System.getProperty("user.dir")).getCanonicalFile();
+        while(current != null)
+        {
+            if(new File(current, "gradlew").isFile() && new File(current, "settings.gradle").isFile())
+            {
+                return current;
+            }
+            current = current.getParentFile();
+        }
+
+        throw new IOException("Could not find project root containing gradlew and settings.gradle");
+    }
+
+    private void consumeServerOutput(Process process)
+    {
+        try(BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream())))
+        {
+            String line;
+            while((line = reader.readLine()) != null)
+            {
+                System.out.println("[Server] " + line);
+            }
+        }
+        catch(IOException e)
+        {
+            System.out.println("[Server] Output reader stopped: " + e.getMessage());
         }
     }
 
@@ -117,7 +370,11 @@ public class Main extends Game
     }
 
     public void addScreen(Screen screen){
-        screenCache.put(screen.getClass(), screen);
+        Screen previous = screenCache.put(screen.getClass(), screen);
+        if(previous != null && previous != screen)
+        {
+            previous.dispose();
+        }
     }
 
     public void setScreen(Class<? extends Screen> screenClass){
@@ -143,9 +400,26 @@ public class Main extends Game
         screenCache.values().forEach(Screen::dispose);
         screenCache.clear();
 
+        if(networkClient != null) networkClient.disconnect();
+        stopLocalServer();
+        removeServerShutdownHook();
         this.batch.dispose();
         this.assetService.debugDiagnostic();
         this.assetService.dispose();
+    }
+
+    private void removeServerShutdownHook()
+    {
+        if(serverShutdownHook == null) return;
+
+        try
+        {
+            Runtime.getRuntime().removeShutdownHook(serverShutdownHook);
+        }
+        catch(IllegalStateException ignored)
+        {
+            // JVM shutdown already started; the hook will run normally.
+        }
     }
 
 }
