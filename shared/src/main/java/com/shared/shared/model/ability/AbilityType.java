@@ -20,33 +20,15 @@ import java.util.Map;
  * an ability carries a dozen parameters and a positional constructor with twelve
  * arguments would be unreadable and easy to mis-order in review.</p>
  *
- * <h2>Balance budget</h2>
- *
- * <p>The design document gives the classes unequal stat totals (Cleric 52 tiers,
- * Archer 42 — see {@link CharacterClass}). Ability tuning is where that is paid
- * back, so the numbers below deliberately compensate:</p>
- *
- * <ul>
- *   <li><b>Archer</b> (lowest stats) gets the longest ranges, the cheapest
- *       ranged attack, and the only damaging AoE ultimate.</li>
- *   <li><b>Cleric and Bard</b> (highest stats) deal the least damage; their
- *       power is entirely in support, and their ultimates carry the longest
- *       cooldowns because Revive and Encore are the strongest tempo swings in
- *       the game.</li>
- *   <li><b>Wraith</b> pairs the highest mobility with the game's only instant
- *       kill, so Curse is a coin flip the victim can escape by hitting back, and
- *       its damage abilities are the weakest per-hit of any attacker.</li>
- *   <li><b>Paladin</b> (lowest mana pool, 4 tiers) gets the cheapest ultimate so
- *       it remains castable.</li>
- *   <li><b>Mage</b> has the highest raw damage but pays the highest mana costs,
- *       and its stats give it the second-lowest HP.</li>
- * </ul>
+ * <p>Abilities complement the equal class-stat budgets: range for Archer,
+ * durability and burst for Paladin, control for Mage and Wraith, and healing
+ * or buffs for the supports. Teleport and Eldritch Blast remain unchanged.</p>
  *
  * <h2>Adding an ability</h2>
  *
  * <ol>
  *   <li>Add a constant with a {@link Spec}.</li>
- *   <li>Give it an {@link AbilitySlot}; the four slots map to hotkeys 1-4.</li>
+ *   <li>Give it an {@link AbilitySlot}; slots order the mouse-driven ability menu.</li>
  *   <li>Nothing else — {@link #forClass(CharacterClass)} discovers it
  *       automatically from {@link #getOwnerClass()}.</li>
  * </ol>
@@ -57,7 +39,7 @@ public enum AbilityType implements Ability {
     BASIC_ATTACK(new Spec("Basic Attack", "A quick strike against an adjacent enemy.")
         .slot(AbilitySlot.PRIMARY).damage(10).range(1.5f).target(TargetType.ENEMY)),
 
-    // ── Paladin: durable frontline, cheap ultimate to offset a 4-tier mana pool ──
+    // ── Paladin: durable frontline, short-range burst, modest mana pool ──
     PALADIN_BASIC(new Spec("Holy Strike", "A blessed melee strike.")
         .owner(CharacterClass.PALADIN).slot(AbilitySlot.PRIMARY)
         .damage(14).range(1.5f).target(TargetType.ENEMY)),
@@ -69,7 +51,7 @@ public enum AbilityType implements Ability {
     DIVINE_SMITE(new Spec("Divine Smite",
         "Ultimate: calls down radiant judgement on a single enemy.")
         .owner(CharacterClass.PALADIN).slot(AbilitySlot.ULTIMATE)
-        .damage(48).mana(24).range(2f).cooldown(4).target(TargetType.ENEMY)),
+        .damage(40).mana(24).range(2f).cooldown(4).target(TargetType.ENEMY)),
 
     // ── Mage: highest damage, highest mana cost, fragile ───────────────────
     MAGE_BASIC(new Spec("Arcane Bolt", "A cantrip that costs no mana.")
@@ -81,7 +63,7 @@ public enum AbilityType implements Ability {
         .damage(26).mana(22).range(5.5f)
         .effect(StatusEffectType.BURN, 50).target(TargetType.ENEMY)),
 
-    ICE_ATTACK(new Spec("Ice Attack", "Freezing shard — 50% chance to chill the target.")
+    ICE_ATTACK(new Spec("Ray of Frost", "Freezing shard — 50% chance to chill the target.")
         .owner(CharacterClass.MAGE).slot(AbilitySlot.TERTIARY)
         .damage(18).mana(16).range(5f)
         .effect(StatusEffectType.SUB_ZERO, 50).target(TargetType.ENEMY)),
@@ -113,7 +95,7 @@ public enum AbilityType implements Ability {
         .mana(20).range(Float.MAX_VALUE).cooldown(3).target(TargetType.TILE)),
 
     // ── Cleric: lowest damage in the game; power is entirely in support ────
-    CLERIC_BASIC(new Spec("Mace Strike", "A solid swing of a blessed mace.")
+    CLERIC_BASIC(new Spec("Sacred Strike", "A close-range strike of radiant power.")
         .owner(CharacterClass.CLERIC).slot(AbilitySlot.PRIMARY)
         .damage(9).range(1.5f).target(TargetType.ENEMY)),
 
@@ -127,7 +109,7 @@ public enum AbilityType implements Ability {
         .healing(45).mana(35).range(2f).cooldown(6).target(TargetType.DOWNED_ALLY)),
 
     // ── Bard: lowest strength, highest utility, longest ultimate cooldown ──
-    BARD_BASIC(new Spec("Dissonant Chord", "A jarring note that rattles a nearby foe.")
+    BARD_BASIC(new Spec("Dissonant Shout", "A thunderous battle chant that rattles a nearby foe.")
         .owner(CharacterClass.BARD).slot(AbilitySlot.PRIMARY)
         .damage(8).range(2f).target(TargetType.ENEMY)),
 
@@ -231,7 +213,7 @@ public enum AbilityType implements Ability {
             for (AbilityType ability : values()) {
                 if (ability.ownerClass == characterClass) abilities.add(ability);
             }
-            // Ordered by slot so index 0 is hotkey [1] and the ultimate is last.
+            // Ordered by slot so the primary is first and the ultimate is last.
             abilities.sort((left, right) ->
                 Integer.compare(left.slot.ordinal(), right.slot.ordinal()));
 
@@ -245,7 +227,7 @@ public enum AbilityType implements Ability {
     /**
      * Abilities available to a class, ordered by slot.
      *
-     * <p>Index 0 is hotkey {@code [1]}; the ultimate is always last.</p>
+     * <p>The primary is first; the ultimate is always last.</p>
      */
     public static List<AbilityType> forClass(CharacterClass characterClass) {
         if (characterClass == null) return List.of(BASIC_ATTACK);

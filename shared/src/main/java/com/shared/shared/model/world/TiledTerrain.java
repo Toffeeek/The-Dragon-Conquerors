@@ -31,15 +31,17 @@ final class TiledTerrain {
 
     TiledTerrain(String mapName, boolean useImageArtwork) {
         try {
+            terrain = new String[30][17];
+            ground = new boolean[30 * TILE_PIXELS][17 * TILE_PIXELS];
+            blockedRows = new ArrayList<>(17 * TILE_PIXELS);
+            BattlefieldArtwork artwork = useImageArtwork ? BattlefieldArtwork.forEnvironment(Environment.fromName(mapName)) : null;
+            if (artwork == null) {
             XmlReader.Element map = read(mapName + ".tmx");
             int width = map.getIntAttribute("width"), height = map.getIntAttribute("height");
             if (width != 30 || height != 17 || map.getIntAttribute("tilewidth") != 16
                 || map.getIntAttribute("tileheight") != 16) {
                 throw new IllegalStateException("Unexpected battlefield dimensions: " + mapName);
             }
-            terrain = new String[width][height];
-            ground = new boolean[width * TILE_PIXELS][height * TILE_PIXELS];
-            blockedRows = new ArrayList<>(height * TILE_PIXELS);
             boolean[][] mask;
             try (DataInputStream input = new DataInputStream(TiledTerrain.class.getResourceAsStream("/battlefields/terrain-mask.bin"))) {
                 int maskWidth = input.readInt(), maskHeight = input.readInt();
@@ -84,7 +86,7 @@ final class TiledTerrain {
                     }
                 }
             }
-            BattlefieldArtwork artwork = useImageArtwork ? BattlefieldArtwork.forEnvironment(Environment.fromName(mapName)) : null;
+            }
             if (artwork != null) {
                 imageTypes = new byte[480][272];
                 try (DataInputStream input = new DataInputStream(TiledTerrain.class.getResourceAsStream(

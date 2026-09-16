@@ -19,26 +19,38 @@ apply plugin: 'io.github.fourlastor.construo'
 import io.github.fourlastor.construo.Target
 
 sourceSets.main.resources.srcDirs += [ rootProject.file('assets').path ]
+// Keep authoring sources and superseded art on disk, but not in the game package.
+sourceSets.main.resources {
+  exclude 'assets.txt', '.gitkeep', 'assets_raw/**', 'maps/**'
+  exclude 'maps-new/*.svg', 'maps-new/*-collision.xml', 'maps-new/*.tiled-*'
+  exclude 'maps-new/map1.tmx', 'maps-new/map1_alt.tmx', 'maps-new/wizard*'
+  exclude 'characters/*.png'
+  exclude 'characters/animated/**/*With magic effects*.png'
+  exclude 'characters/animated/Knight/Knight_Block.png'
+  ['Necromancer', 'Priest', 'Wizard'].each { character ->
+    exclude "characters/animated/${character}/*Effect.png", "characters/animated/${character}/*effect.png"
+  }
+}
 application.mainClass = 'com.github.thedragonconquerors.lwjgl3.Lwjgl3Launcher'
 application.applicationName = appName
 eclipse.project.name = appName + '-lwjgl3'
-java.sourceCompatibility = 17
-java.targetCompatibility = 17
+java.sourceCompatibility = 21
+java.targetCompatibility = 21
 if (JavaVersion.current().isJava9Compatible()) {
-        compileJava.options.release.set(17)
+        compileJava.options.release.set(21)
 }
 
 dependencies {
   implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
-  implementation "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-desktop"
   implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
   implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
   implementation project(':core')
   implementation project(':shared')
+  testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher:6.0.3'
 
   if(enableGraalNative == 'true') {
     implementation "io.github.berstanio:gdx-svmhelper-backend-lwjgl3:$graalHelperVersion"
-      implementation "io.github.berstanio:gdx-svmhelper-extension-box2d:$graalHelperVersion"
       implementation "io.github.berstanio:gdx-svmhelper-extension-freetype:$graalHelperVersion"
 
   }
@@ -57,10 +69,95 @@ def os = System.properties['os.name'].toLowerCase(Locale.ROOT)
 
 run {
   workingDir = rootProject.file('assets').path
+  systemProperty 'tdc.profile', providers.gradleProperty('profile').getOrElse('false')
 // You can uncomment the next line if your IDE claims a build failure even when the app closed properly.
   //setIgnoreExitValue(true)
   jvmArgs += "--enable-native-access=ALL-UNNAMED"
   if (os.contains('mac')) jvmArgs += "-XstartOnFirstThread"
+}
+
+sourceSets {
+  animationPreview {
+    java.srcDir 'src/preview/java'
+    compileClasspath += sourceSets.main.output + configurations.runtimeClasspath
+    runtimeClasspath += output + compileClasspath
+  }
+}
+
+processResources {
+  dependsOn ':server:bootJar'
+  from({ project(':server').tasks.named('bootJar').get().archiveFile.get().asFile }) {
+    into 'server'
+    rename { 'tdc-server.jar' }
+  }
+}
+
+// Portable Windows folder: one runtime serves both the desktop and bundled server.
+def portableRuntime = layout.buildDirectory.dir('portable-runtime')
+def runtimeLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+tasks.register('portableRuntime', Exec) {
+  group = 'distribution'
+  inputs.property('javaHome', runtimeLauncher.map { it.metadata.installationPath.asFile.absolutePath })
+  outputs.dir portableRuntime
+  doFirst {
+    def runtimeDir = portableRuntime.get().asFile
+    if (runtimeDir.exists()) project.delete(runtimeDir) // Only this task's generated output.
+    def jlink = new File(runtimeLauncher.get().metadata.installationPath.asFile, 'bin/jlink.exe')
+    commandLine jlink.absolutePath, '--add-modules', 'ALL-MODULE-PATH', '--strip-debug',
+      '--no-header-files', '--no-man-pages', '--compress=2', '--output', runtimeDir.absolutePath
+  }
+}
+def nativeInput = layout.buildDirectory.dir('native-input')
+def nativeOutput = layout.buildDirectory.dir('native-app')
+tasks.register('nativeInput', Sync) {
+  dependsOn tasks.named('jar')
+  into nativeInput
+  from(tasks.named('jar')) { rename { 'game.jar' } }
+}
+tasks.register('nativeWindowsApp', Exec) {
+  group = 'distribution'
+  dependsOn tasks.named('nativeInput'), tasks.named('portableRuntime')
+  inputs.dir nativeInput
+  inputs.dir portableRuntime
+  outputs.dir nativeOutput
+  doFirst {
+    def output = nativeOutput.get().asFile
+    if (output.exists()) project.delete(output) // Explicit generated build/native-app only.
+    def jpackage = new File(runtimeLauncher.get().metadata.installationPath.asFile, 'bin/jpackage.exe')
+    commandLine jpackage.absolutePath, '--type', 'app-image', '--name', 'The Dragon Conquerors',
+      '--app-version', '1.0.0', '--vendor', 'The Dragon Conquerors',
+      '--input', nativeInput.get().asFile.absolutePath, '--main-jar', 'game.jar',
+      '--main-class', application.mainClass.get(), '--runtime-image', portableRuntime.get().asFile.absolutePath,
+      '--java-options', '--enable-native-access=ALL-UNNAMED', '--dest', output.absolutePath
+  }
+}
+tasks.register('packageWindows', Sync) {
+  group = 'distribution'
+  description = 'Build a self-contained Windows game folder, including Java and the host server.'
+  dependsOn tasks.named('nativeWindowsApp')
+  into layout.buildDirectory.dir('portable/The Dragon Conquerors')
+  from(nativeOutput.map { it.dir('The Dragon Conquerors') })
+  from('packaging')
+}
+
+tasks.register('animationPreview', JavaExec) {
+  group = 'verification'
+  description = 'Offline six-class animation and effect preview with frame stepping.'
+  dependsOn animationPreviewClasses
+  classpath = sourceSets.animationPreview.runtimeClasspath
+  mainClass = 'com.github.thedragonconquerors.lwjgl3.AnimationPreview'
+  workingDir = rootProject.file('assets')
+  jvmArgs '--enable-native-access=ALL-UNNAMED'
+}
+
+tasks.register('presentationPreview', JavaExec) {
+  group = 'verification'
+  description = 'Offline four-player HUD/results fixture. H HUD, R results, T text size.'
+  dependsOn animationPreviewClasses
+  classpath = sourceSets.animationPreview.runtimeClasspath
+  mainClass = 'com.github.thedragonconquerors.lwjgl3.PresentationPreview'
+  workingDir = rootProject.file('assets')
+  jvmArgs '--enable-native-access=ALL-UNNAMED'
 }
 
 jar {
@@ -194,6 +291,13 @@ distributions {
 
 startScripts.dependsOn(':lwjgl3:jar')
 startScripts.classpath = project.tasks.jar.outputs.files
+
+test {
+  useJUnitPlatform()
+  dependsOn tasks.named('jar')
+  systemProperty 'game.jar', tasks.named('jar').get().archiveFile.get().asFile.absolutePath
+  systemProperty 'game.assets', rootProject.file('assets').absolutePath
+}
 
 if(enableGraalNative == 'true') {
   apply from: file("nativeimage.gradle")

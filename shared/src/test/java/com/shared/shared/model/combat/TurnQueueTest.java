@@ -17,6 +17,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TurnQueueTest {
     @Test
+    void previewIsReadOnlySkipsDownedAndUsesNewInitiativeAtRoundBoundary() {
+        TestCombatant first=combatant(0,1,true), second=combatant(1,2,true), down=combatant(2,2,false);
+        TurnQueue queue=new TurnQueue(List.of(first,second,down));
+        assertEquals(first,queue.nextCandidate());
+        assertNull(queue.current());assertEquals(1,queue.getRoundNumber());
+        assertEquals(first,queue.advance());assertEquals(second,queue.nextCandidate());
+        assertEquals(second,queue.advance());
+        second.getStats().setSpeed(first.getStats().getSpeed()+10);
+        assertEquals(second,queue.nextCandidate());assertEquals(second,queue.nextCandidate());
+        assertEquals(1,queue.getRoundNumber());assertEquals(second,queue.current());
+        assertEquals(second,queue.advance());assertEquals(2,queue.getRoundNumber());
+        first.getStats().setHp(0);second.getStats().setHp(0);
+        assertNull(queue.nextCandidate());
+    }
+    @Test
     void mutualWipeIsADraw() {
         TestCombatant azure = combatant(0, 1, false);
         TestCombatant crimson = combatant(1, 2, false);

@@ -6,9 +6,6 @@ dependencies {
   implementation project(':client')
   compileOnly 'org.projectlombok:lombok:1.18.46'
   annotationProcessor 'org.projectlombok:lombok:1.18.46'
-  api "com.badlogicgames.ashley:ashley:$ashleyVersion"
-  api "com.badlogicgames.gdx:gdx-ai:$aiVersion"
-  api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
   api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
   api "com.badlogicgames.gdx:gdx:$gdxVersion"
   testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
@@ -19,7 +16,10 @@ dependencies {
   }
 }
 
-test { useJUnitPlatform() }
+test {
+  useJUnitPlatform()
+  systemProperty 'game.assets', rootProject.file('assets').absolutePath
+}
 
 jar {
   duplicatesStrategy = DuplicatesStrategy.EXCLUDE

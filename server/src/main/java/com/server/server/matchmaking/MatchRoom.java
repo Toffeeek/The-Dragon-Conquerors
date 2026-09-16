@@ -69,6 +69,10 @@ public final class MatchRoom {
     public synchronized boolean isReady(String sessionId) {
         return readySessions.contains(sessionId);
     }
+    public synchronized void suspendSession(String sessionId) {
+        readySessions.remove(sessionId);
+        rematchVotes.clear(); // A disconnected player's old vote cannot start a new match.
+    }
 
     public synchronized void removePlayer(int playerId, String sessionId) {
         readySessions.remove(sessionId);
@@ -91,6 +95,10 @@ public final class MatchRoom {
                 rematchVotes.size(), required);
         }
 
+        if (lobby.players().stream().anyMatch(player -> !isReady(player.getSessionId()))) {
+            return RematchDecision.rejected("Wait for every player to reconnect before rematching.",
+                rematchVotes.size(), required);
+        }
         rematchVotes.add(playerId);
         int votes = rematchVotes.size();
         if (votes < required) return RematchDecision.waiting(votes, required);

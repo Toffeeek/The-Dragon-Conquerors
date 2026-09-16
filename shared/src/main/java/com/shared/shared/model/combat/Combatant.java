@@ -120,7 +120,7 @@ public interface Combatant {
         return other != null && other.getTeamIndex() != getTeamIndex();
     }
 
-    /** This combatant's abilities in action-bar order; index 0 is hotkey {@code [1]}. */
+    /** This combatant's abilities in mouse-menu order, primary first. */
     default List<AbilityType> abilities() {
         return AbilityType.forClass(getCharacterClass());
     }

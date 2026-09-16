@@ -30,10 +30,13 @@ public class GameController {
 
     private final SimpMessageSendingOperations messages;
     private final RoomRegistry rooms;
+    private final com.server.server.config.WebSocketEventListener departures;
 
-    public GameController(SimpMessageSendingOperations messages, RoomRegistry rooms) {
+    public GameController(SimpMessageSendingOperations messages, RoomRegistry rooms,
+                          com.server.server.config.WebSocketEventListener departures) {
         this.messages = messages;
         this.rooms = rooms;
+        this.departures = departures;
     }
 
     @MessageMapping("/game.takeAction")
@@ -78,6 +81,7 @@ public class GameController {
         sendPrivate(sessionId, Packet.builder()
             .ID(player.getId())
             .roomId(room.getId())
+            .resumeToken(rooms.resumeToken(sessionId))
             .testingMode(room.isTestingMode())
             .connectedPlayers(room.getLobby().size())
             .action(Action.PRIVATE_JOIN_CONFIRMATION)
@@ -111,8 +115,46 @@ public class GameController {
             broadcastVoteUpdate(room);
             sendPrivate(sessionId, Packet.builder().action(Action.ROOM_READY)
                 .ID(joined.getId()).roomId(room.getId()).testingMode(room.isTestingMode())
-                .connectedPlayers(room.getLobby().size()).build());
+                .connectedPlayers(room.getLobby().size()).matchState(room.getMatches().snapshot()).build());
+            MatchState state = room.getMatches().snapshot();
+            if (state != null) broadcast(room, Packet.builder().action(Action.MATCH_STATE).matchState(state).build());
+            if (state != null) sendPrivate(sessionId, withRoom(Packet.builder()
+                .action(Action.MATCH_START).environment(state.getEnvironment()).matchState(state).build(), room));
         }
+    }
+
+    @MessageMapping("/game.resume")
+    public synchronized void resume(@Payload Packet packet, SimpMessageHeaderAccessor headers) {
+        try {
+            RoomAssignment assignment = rooms.resume(packet.getResumeToken(), headers.getSessionId());
+            headers.getSessionAttributes().put(PLAYER_ID_ATTRIBUTE, assignment.getPlayer().getId());
+            headers.getSessionAttributes().put(ROOM_ID_ATTRIBUTE, assignment.getRoom().getId());
+            sendPrivate(headers.getSessionId(), Packet.builder().action(Action.PRIVATE_JOIN_CONFIRMATION)
+                .ID(assignment.getPlayer().getId()).roomId(assignment.getRoom().getId())
+                .resumeToken(rooms.resumeToken(headers.getSessionId())).testingMode(assignment.getRoom().isTestingMode())
+                .connectedPlayers(assignment.getRoom().getLobby().size()).build());
+        } catch (IllegalArgumentException error) {
+            sendPrivate(headers.getSessionId(), Packet.builder().action(Action.ERROR).message(error.getMessage()).build());
+        }
+    }
+
+    @MessageMapping("/game.sync")
+    public synchronized void sync(@Payload Packet packet, SimpMessageHeaderAccessor headers) {
+        authenticatedRoom(headers).ifPresent(room -> {
+            MatchState state = room.getMatches().snapshot();
+            if (state != null) sendPrivate(headers.getSessionId(), withRoom(Packet.builder().action(Action.MATCH_START)
+                .environment(state.getEnvironment()).matchState(state).build(), room));
+            else {
+                room.suspendSession(headers.getSessionId());
+                roomReady(packet, headers);
+            }
+        });
+    }
+
+    @MessageMapping("/game.leave")
+    public synchronized void leave(@Payload Packet packet, SimpMessageHeaderAccessor headers) {
+        Object id = headers.getSessionAttributes().get(PLAYER_ID_ATTRIBUTE);
+        if (id instanceof Integer playerId) departures.broadcastDeparture(rooms.disconnect(headers.getSessionId(), playerId));
     }
 
     @MessageMapping("/game.startTestMatch")

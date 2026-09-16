@@ -47,6 +47,11 @@ public final class BattlefieldNavigation {
         return clamp(start, smooth, budget);
     }
 
+    /** Reuse immutable terrain classification without repeating collision queries. */
+    public boolean isNodeWalkable(int column, int row) {
+        return column >= 0 && row >= 0 && column < cols && row < rows && open[row * cols + column];
+    }
+
     public List<Vector2> reachable(Vector2 start, float budget, Collection<Vector2> occupied) {
         if (!battlefield.isWalkable(start) || budget <= EPSILON || !Float.isFinite(budget)) return List.of();
         Search search = search(start, null, budget, occupied);
@@ -139,6 +144,5 @@ public final class BattlefieldNavigation {
         for (Vector2 waypoint : path) { distance += start.dst(waypoint); start = waypoint; }
         return distance;
     }
-    private int node(Vector2 p) { return Math.min(rows - 1, (int)(p.y / NODE_SIZE)) * cols + Math.min(cols - 1, (int)(p.x / NODE_SIZE)); }
     private Vector2 point(int id) { return new Vector2((id % cols + 0.5f) * NODE_SIZE, (id / cols + 0.5f) * NODE_SIZE); }
 }

@@ -33,10 +33,10 @@ public class StatCalculator {
     }
 
     public static int evasionChance(StatComponent stats){
-        int base = Math.max(0, (stats.getSpeed()-5)*3);
-        int bonus = inspirationBonus(stats)*5;
+        int base = Math.max(0, (stats.getSpeed()-5)*2);
+        int bonus = inspirationBonus(stats)*3;
 
-        return Math.min(60, base+bonus);
+        return Math.min(30, base+bonus);
     }
 
     public static int initiative(StatComponent stats){

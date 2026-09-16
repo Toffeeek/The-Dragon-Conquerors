@@ -6,11 +6,9 @@ import com.shared.shared.model.Action;
 /**
  * Which action-bar slot an ability occupies.
  *
- * <p>Slot order is also hotkey order on the HUD: {@code PRIMARY} is key 1,
- * {@code ULTIMATE} is the last key. The mapping to {@link Action} exists because
- * the wire protocol already speaks in {@code PRIMARY / SECONDARY / ULTIMATE}
- * terms, so this enum is the bridge between the ability catalogue and the
- * packets sent to the server.</p>
+ * <p>Slots order the mouse-driven ability menu. The {@link Action} mapping is
+ * retained for legacy protocol compatibility; current clients send
+ * {@code USE_ABILITY} with the exact ability.</p>
  */
 public enum AbilitySlot {
 

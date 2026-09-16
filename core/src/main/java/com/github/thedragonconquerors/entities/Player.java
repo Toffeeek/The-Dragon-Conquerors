@@ -51,11 +51,12 @@ public class Player implements Combatant {
         this.teamIndex = teamIndex;
         this.stats = build.createStats();
         this.position = new Vector2(position);
-        this.speed = 5f;
+        // Client playback speed only; server Speed stats and movement budgets are unchanged.
+        this.speed = 3.5f;
 
         float maxDistance = StatCalculator.deriveMaxMovementDistance(stats);
         this.movementController = new MovementController(maxDistance);
-        this.animationController = new PlayerAnimationController();
+        this.animationController = new PlayerAnimationController(characterClass);
     }
 
     public int getID() { return ID; }

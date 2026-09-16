@@ -92,6 +92,9 @@ class EnvironmentRulesTest {
         assertTrue(lethal.isAccepted());
         assertEquals(0, player(lethal,2).getHp());
         assertTrue(lethal.getState().getMessage().contains("pushed into lava"));
+        var stats=lethal.getState().getStatistics().stream().filter(s->s.getPlayerId()==0).findFirst().orElseThrow();
+        assertEquals(1,stats.getEnvironmentalKills());
+        assertEquals(1,stats.getEliminations(),"A push kill must not be counted twice");
 
         players.get(0).setPosition(p2(530,447));
         players.get(2).setPosition(p2(530,412));
@@ -100,6 +103,7 @@ class EnvironmentRulesTest {
         assertTrue(stopped.isAccepted());
         assertTrue(player(stopped,2).getHp() > 0);
         assertTrue(stopped.getState().getMessage().contains("stopped by terrain"));
+        assertEquals(0,stopped.getState().getStatistics().getFirst().getEnvironmentalKills());
     }
 
     private List<LobbyPlayer> lavaPlayers() {
@@ -129,6 +133,7 @@ class EnvironmentRulesTest {
             player(2, CharacterClass.PALADIN, Race.DRAGONBORNE, 2, 2.1f, 9f),
             player(3, CharacterClass.ARCHER, Race.HUMAN, 2, 25f, 12f));
         AuthoritativeMatch match = match(Environment.CANYON, players, resolver());
+        while (match.getActivePlayerId() != 0) endCurrentTurn(match);
 
         CombatCommandResult result = match.useAbility(0, AbilityType.ELDRITCH_BLAST, 2, null);
         assertTrue(result.isAccepted());

@@ -33,6 +33,7 @@ public class MenuScreen extends ScreenAdapter {
 
     private TextField addressField;
     private TextButton hostButton;
+    private TextButton practiceButton;
     private TextButton joinButton;
     private TextButton displayButton;
     private TextButton quitButton;
@@ -53,7 +54,7 @@ public class MenuScreen extends ScreenAdapter {
 
         disposed = false;
         setBusy(false);
-        setStatus("Ready. Host a campaign or enter a server address.",
+        setStatus("",
             FantasyUiTheme.TEXT_MUTED);
         updateDisplayButton();
         Gdx.input.setInputProcessor(stage);
@@ -75,6 +76,7 @@ public class MenuScreen extends ScreenAdapter {
         root.setFillParent(true);
         root.pad(48f, 58f, 42f, 58f);
         stage.addActor(root);
+        com.github.thedragonconquerors.ui.UiMotion.reveal(root);
 
         Table hero = createHeroPanel();
         Table menu = createMenuPanel();
@@ -86,49 +88,19 @@ public class MenuScreen extends ScreenAdapter {
     private Table createHeroPanel() {
         Table hero = new Table();
         hero.left().top();
-        hero.pad(52f, 38f, 46f, 38f);
+        hero.pad(34f, 24f, 24f, 24f);
 
-        Label eyebrow = new Label("TURN-BASED MULTIPLAYER RPG", skin, "eyebrow");
-        Label title = new Label("THE DRAGON\nCONQUERORS", skin, "title");
+        Label eyebrow = new Label("THE DRAGON", skin, "heading");
+        Label title = new Label("CONQUERORS", skin, "title");
         title.setAlignment(Align.left);
 
         Image divider = new Image(theme.divider());
 
-        Label subtitle = new Label(
-            "Gather your party. Choose a class.\nConquer the dungeon one turn at a time.",
-            skin, "subtitle");
-        subtitle.setAlignment(Align.left);
-
-        Table features = new Table();
-        features.setBackground(theme.inset());
-        features.pad(18f, 20f, 18f, 20f);
-        features.left();
-
-        addFeature(features, "TACTICAL COMBAT", "Movement, range and positioning decide every encounter.");
-        addFeature(features, "CLASS-BASED PARTY", "Warrior, Mage, Archer, Paladin and Rogue play differently.");
-        addFeature(features, "MULTIPLAYER", "Host locally or join another player's campaign over WebSocket.");
-
-        Label buildLabel = new Label(
-            "DEVELOPMENT BUILD  |  THE DRAGON CONQUERORS",
-            skin, "caption");
-
-        hero.add(eyebrow).left().padTop(28f).row();
+        hero.add(eyebrow).left().padTop(20f).row();
         hero.add(title).left().padTop(10f).row();
         hero.add(divider).left().width(230f).height(3f).padTop(22f).row();
-        hero.add(subtitle).left().padTop(22f).row();
-        hero.add(features).width(540f).left().padTop(42f).row();
         hero.add().expandY().row();
-        hero.add(buildLabel).left();
         return hero;
-    }
-
-    private void addFeature(Table table, String heading, String description) {
-        Label headingLabel = new Label(heading, skin, "section");
-        Label descriptionLabel = new Label(description, skin, "caption");
-        descriptionLabel.setWrap(true);
-
-        table.add(headingLabel).left().padBottom(4f).row();
-        table.add(descriptionLabel).width(490f).left().padBottom(16f).row();
     }
 
     private Table createMenuPanel() {
@@ -137,24 +109,26 @@ public class MenuScreen extends ScreenAdapter {
         panel.pad(34f, 34f, 30f, 34f);
         panel.top();
 
-        Label heading = new Label("MAIN MENU", skin, "heading");
+        Label heading = new Label("Begin your tale", skin, "heading");
         heading.setAlignment(Align.center);
-        Label hint = new Label("Create a lobby or join an existing campaign.", skin, "caption");
-        hint.setAlignment(Align.center);
 
-        hostButton = new TextButton("HOST CAMPAIGN", skin, "primary");
+        practiceButton = new TextButton("PRACTICE", skin, "secondary");
+        practiceButton.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent event, float x, float y) { hostGame(true); }
+        });
+        hostButton = new TextButton("HOST LAN", skin, "primary");
         hostButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                hostGame();
+                hostGame(false);
             }
         });
 
-        Label addressLabel = new Label("SERVER ADDRESS", skin, "section");
+        Label addressLabel = new Label("INVITE ADDRESS", skin, "section");
         addressField = new TextField("", skin);
-        addressField.setMessageText("Paste host address, e.g. ws://192.168.1.10:8080/ws");
+        addressField.setMessageText("Host address");
 
-        joinButton = new TextButton("JOIN CAMPAIGN", skin, "secondary");
+        joinButton = new TextButton("JOIN LAN", skin, "secondary");
         joinButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
@@ -163,7 +137,6 @@ public class MenuScreen extends ScreenAdapter {
         });
 
         Table statusBox = new Table();
-        statusBox.setBackground(theme.inset());
         statusBox.pad(12f, 14f, 12f, 14f);
         statusLabel = new Label("", skin, "status");
         statusLabel.setWrap(true);
@@ -192,9 +165,9 @@ public class MenuScreen extends ScreenAdapter {
         utilityRow.add(quitButton).width(120f).padLeft(10f);
 
         panel.add(heading).growX().padTop(4f).row();
-        panel.add(hint).growX().padTop(8f).padBottom(26f).row();
-        panel.add(hostButton).width(350f).height(58f).row();
-        panel.add(new Image(theme.divider())).width(300f).height(2f).padTop(24f).padBottom(22f).row();
+        panel.add(practiceButton).width(350f).height(48f).padTop(24f).row();
+        panel.add(hostButton).width(350f).height(48f).padTop(10f).row();
+        panel.add(new Image(theme.divider())).width(300f).height(2f).padTop(18f).padBottom(16f).row();
         panel.add(addressLabel).width(350f).left().padBottom(7f).row();
         panel.add(addressField).width(350f).height(50f).row();
         panel.add(joinButton).width(350f).height(54f).padTop(12f).row();
@@ -204,20 +177,20 @@ public class MenuScreen extends ScreenAdapter {
         return panel;
     }
 
-    private void hostGame() {
+    private void hostGame(boolean practice) {
         if (busy) return;
         setBusy(true);
-        setStatus("Opening the local campaign server...", FantasyUiTheme.GOLD);
+        setStatus(practice ? "Opening practice..." : "Opening a four-player LAN lobby...", FantasyUiTheme.GOLD);
 
         Thread hostThread = new Thread(() -> {
             try {
-                game.startLocalServer();
+                game.startLocalServer(practice);
                 if (!game.waitForLocalServer(Duration.ofSeconds(30))) {
                     throw new IllegalStateException("The local server did not become ready.");
                 }
 
                 NetworkClient client = connectWithRetry(game.getLocalServerUrl());
-                String joinUrl = game.getLocalJoinUrl();
+                String joinUrl = practice ? game.getLocalServerUrl() : game.getLocalJoinUrl();
                 postToRenderThread(() -> game.startLobby(client, joinUrl));
             } catch (Exception exception) {
                 game.stopLocalServer();
@@ -257,12 +230,12 @@ public class MenuScreen extends ScreenAdapter {
 
     private NetworkClient connectWithRetry(String url) throws Exception {
         Exception lastError = null;
-        for (int attempt = 0; attempt < 30; attempt++) {
+        for (int attempt = 0; attempt < 3; attempt++) {
             try {
                 return game.connectToServer(url);
             } catch (Exception exception) {
                 lastError = exception;
-                Thread.sleep(400L);
+                if (attempt < 2) Thread.sleep(400L);
             }
         }
 
@@ -332,6 +305,7 @@ public class MenuScreen extends ScreenAdapter {
     private void setBusy(boolean value) {
         busy = value;
         if (hostButton != null) hostButton.setDisabled(value);
+        if (practiceButton != null) practiceButton.setDisabled(value);
         if (joinButton != null) joinButton.setDisabled(value);
         if (displayButton != null) displayButton.setDisabled(value);
         if (quitButton != null) quitButton.setDisabled(value);
@@ -357,8 +331,8 @@ public class MenuScreen extends ScreenAdapter {
     private void updateDisplayButton() {
         if (displayButton == null) return;
         displayButton.setText(Gdx.graphics.isFullscreen()
-            ? "DISPLAY: FULLSCREEN"
-            : "DISPLAY: WINDOWED");
+            ? "FULLSCREEN"
+            : "WINDOWED");
     }
 
     @Override
@@ -375,6 +349,7 @@ public class MenuScreen extends ScreenAdapter {
         }
 
         stage.act(Math.min(delta, 1f / 15f));
+        if(theme.refreshTextScale())for(var actor:stage.getActors())com.github.thedragonconquerors.ui.UiMotion.relayout(actor);
         stage.draw();
     }
 

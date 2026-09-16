@@ -120,6 +120,11 @@ public final class TurnQueue {
     public int getRoundNumber() {
         return roundNumber;
     }
+    /** Next initiative slot, before turn-start status effects (which may skip it). */
+    public Combatant nextCandidate() {
+        for (int i=index+1;i<order.size();i++) if(order.get(i).isAlive())return order.get(i);
+        return participants.stream().filter(Combatant::isAlive).sorted(ROUND_ORDER).findFirst().orElse(null);
+    }
 
     /** True when the current turn is the first of a new round. */
     public boolean isRoundStart() {

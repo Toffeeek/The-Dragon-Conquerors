@@ -20,6 +20,7 @@ public class Packet
     private int activePlayerID = -1;
     private String username;
     private String roomId;
+    private String resumeToken;
     private boolean testingMode;
     private Vector2 finalPosition;
     private Action action;

@@ -23,30 +23,30 @@ import java.util.Random;
 /**
  * Shared procedural UI theme for menu and lobby screens.
  *
- * Generated drawables with size-specific TrueType text when a system font is
- * available. The built-in bitmap font remains a fallback on other installations.
+ * Generated drawables with bundled Cinzel headings and Inter body text.
+ * The built-in bitmap font remains a fallback if font assets cannot be loaded.
  */
 public final class FantasyUiTheme implements Disposable {
     public static final float VIRTUAL_WIDTH = 1280f;
     public static final float VIRTUAL_HEIGHT = 720f;
 
-    public static final Color TEXT_PRIMARY = new Color(0.94f, 0.90f, 0.80f, 1f);
-    public static final Color TEXT_MUTED = new Color(0.67f, 0.64f, 0.58f, 1f);
-    public static final Color GOLD = new Color(0.88f, 0.68f, 0.30f, 1f);
-    public static final Color GOLD_DIM = new Color(0.57f, 0.43f, 0.23f, 1f);
+    public static final Color TEXT_PRIMARY = new Color(0.96f, 0.95f, 0.89f, 1f);
+    public static final Color TEXT_MUTED = new Color(0.74f, 0.81f, 0.84f, 1f);
+    public static final Color GOLD = new Color(0.93f, 0.79f, 0.49f, 1f);
+    public static final Color GOLD_DIM = new Color(0.59f, 0.51f, 0.34f, 1f);
     public static final Color SUCCESS = new Color(0.42f, 0.78f, 0.48f, 1f);
     public static final Color ERROR = new Color(0.95f, 0.42f, 0.34f, 1f);
 
-    private static final Color PANEL = new Color(0.075f, 0.070f, 0.075f, 0.96f);
-    private static final Color PANEL_ALT = new Color(0.105f, 0.095f, 0.095f, 0.96f);
-    private static final Color BORDER = new Color(0.42f, 0.31f, 0.16f, 1f);
-    private static final Color FIELD = new Color(0.045f, 0.043f, 0.048f, 1f);
-    private static final Color IRON = new Color(0.17f, 0.18f, 0.20f, 1f);
-    private static final Color IRON_HOVER = new Color(0.23f, 0.24f, 0.27f, 1f);
-    private static final Color IRON_DOWN = new Color(0.11f, 0.12f, 0.14f, 1f);
-    private static final Color BRONZE = new Color(0.50f, 0.27f, 0.11f, 1f);
-    private static final Color BRONZE_HOVER = new Color(0.66f, 0.36f, 0.14f, 1f);
-    private static final Color BRONZE_DOWN = new Color(0.35f, 0.18f, 0.08f, 1f);
+    private static final Color PANEL = new Color(0.045f, 0.085f, 0.12f, 0.84f);
+    private static final Color PANEL_ALT = new Color(0.09f, 0.15f, 0.19f, 0.72f);
+    private static final Color BORDER = new Color(0.38f, 0.47f, 0.50f, 0.65f);
+    private static final Color FIELD = new Color(0.025f, 0.055f, 0.08f, 0.82f);
+    private static final Color IRON = new Color(0.08f, 0.15f, 0.20f, 0.78f);
+    private static final Color IRON_HOVER = new Color(0.15f, 0.27f, 0.32f, 0.92f);
+    private static final Color IRON_DOWN = new Color(0.04f, 0.10f, 0.14f, 0.95f);
+    private static final Color BRONZE = new Color(0.19f, 0.28f, 0.29f, 0.94f);
+    private static final Color BRONZE_HOVER = new Color(0.28f, 0.39f, 0.39f, 1f);
+    private static final Color BRONZE_DOWN = new Color(0.10f, 0.18f, 0.21f, 1f);
     private static final Color BLUE = new Color(0.13f, 0.35f, 0.52f, 1f);
     private static final Color BLUE_HOVER = new Color(0.18f, 0.47f, 0.66f, 1f);
     private static final Color RED = new Color(0.50f, 0.16f, 0.13f, 1f);
@@ -62,20 +62,34 @@ public final class FantasyUiTheme implements Disposable {
     private final Drawable inset;
     private final Drawable divider;
     private final FileHandle fontFile;
+    private final FileHandle displayFontFile;
+    private float appliedTextScale = 1f;
 
     public FantasyUiTheme() {
         fontFile = findReadableFont();
+        FileHandle cinzel=com.badlogic.gdx.Gdx.files.internal("fonts/Cinzel.ttf");
+        displayFontFile=cinzel.exists()?cinzel:fontFile;
         background = new TextureRegionDrawable(createDungeonBackground());
         panel = new NinePatchDrawable(createPatch(PANEL, BORDER, 14, 2));
         panelAlt = new NinePatchDrawable(createPatch(PANEL_ALT, BORDER, 12, 1));
         inset = new NinePatchDrawable(createPatch(
-            new Color(0.035f, 0.034f, 0.038f, 0.94f),
-            new Color(0.25f, 0.20f, 0.13f, 1f), 10, 1));
+            new Color(0.04f, 0.09f, 0.13f, 0.45f),
+            new Color(0.30f, 0.43f, 0.48f, 0.40f), 6, 1));
         divider = new TextureRegionDrawable(createSolidTexture(GOLD_DIM, 4, 2));
 
         createFontsAndLabels();
         createButtons();
         createTextField();
+        refreshTextScale();
+    }
+
+    public boolean refreshTextScale() {
+        float next = com.github.thedragonconquerors.ui.PresentationSettings.textScale();
+        if (next == appliedTextScale) return false;
+        for (BitmapFont font : skin.getAll(BitmapFont.class).values())
+            font.getData().setScale(font.getData().scaleX * next / appliedTextScale);
+        appliedTextScale = next;
+        return true;
     }
 
     public Skin skin() {
@@ -109,9 +123,9 @@ public final class FantasyUiTheme implements Disposable {
 
     private void createFontsAndLabels() {
         BitmapFont body = font(18, 1.05f);
-        BitmapFont title = font(44, 2.85f);
-        BitmapFont heading = font(26, 1.65f);
-        BitmapFont button = font(19, 1.10f);
+        BitmapFont title = font(44, 2.85f, displayFontFile);
+        BitmapFont heading = font(25, 1.65f, displayFontFile);
+        BitmapFont button = font(18, 1.10f, displayFontFile);
         BitmapFont small = font(16, 0.86f);
         BitmapFont tiny = font(14, 0.74f);
 
@@ -132,20 +146,27 @@ public final class FantasyUiTheme implements Disposable {
         skin.add("caption", new Label.LabelStyle(tiny, TEXT_MUTED), Label.LabelStyle.class);
         skin.add("status", new Label.LabelStyle(small, TEXT_PRIMARY), Label.LabelStyle.class);
         skin.add("class-title", new Label.LabelStyle(heading, GOLD), Label.LabelStyle.class);
-        skin.add("class-role", new Label.LabelStyle(small, GOLD_DIM), Label.LabelStyle.class);
+        skin.add("class-role", new Label.LabelStyle(small, TEXT_MUTED), Label.LabelStyle.class);
     }
 
     private BitmapFont font(int size, float fallbackScale) {
-        if (fontFile != null) {
-            FreeTypeFontGenerator generator = new FreeTypeFontGenerator(fontFile);
+        return font(size,fallbackScale,fontFile);
+    }
+    private BitmapFont font(int size, float fallbackScale, FileHandle face) {
+        if (face != null) {
+            FreeTypeFontGenerator generator = new FreeTypeFontGenerator(face);
             try {
                 FreeTypeFontParameter parameter = new FreeTypeFontParameter();
                 parameter.size = size;
                 parameter.color = Color.WHITE;
+                parameter.borderWidth = size<20?1.1f:.8f;
+                parameter.borderColor = new Color(.015f,.025f,.035f,.9f);
+                parameter.shadowOffsetY = 1;
+                parameter.shadowColor = new Color(0,0,0,.6f);
                 parameter.minFilter = Texture.TextureFilter.Linear;
                 parameter.magFilter = Texture.TextureFilter.Linear;
                 parameter.hinting = FreeTypeFontGenerator.Hinting.Full;
-                parameter.characters = FreeTypeFontGenerator.DEFAULT_CHARS;
+                parameter.characters = FreeTypeFontGenerator.DEFAULT_CHARS + "\u2013\u2014\u2018\u2019\u201c\u201d";
                 BitmapFont font = generator.generateFont(parameter);
                 font.setUseIntegerPositions(true);
                 return font;
@@ -163,6 +184,8 @@ public final class FantasyUiTheme implements Disposable {
     }
 
     private FileHandle findReadableFont() {
+        FileHandle bundled = com.badlogic.gdx.Gdx.files.internal("fonts/Inter-Regular.otf");
+        if (bundled.exists()) return bundled;
         String windowsDirectory = System.getenv("WINDIR");
         String[] paths = {
             (windowsDirectory == null ? "C:/Windows" : windowsDirectory) + "/Fonts/segoeui.ttf",
@@ -186,7 +209,7 @@ public final class FantasyUiTheme implements Disposable {
         BitmapFont smallFont = skin.get("font-small", BitmapFont.class);
 
         TextButton.TextButtonStyle primary = buttonStyle(
-            buttonFont, BRONZE, BRONZE_HOVER, BRONZE_DOWN, GOLD, BORDER);
+            buttonFont, BRONZE, BRONZE_HOVER, BRONZE_DOWN, GOLD, GOLD_DIM);
         skin.add("primary", primary, TextButton.TextButtonStyle.class);
         skin.add("default", primary, TextButton.TextButtonStyle.class);
 
@@ -196,11 +219,11 @@ public final class FantasyUiTheme implements Disposable {
 
         TextButton.TextButtonStyle quiet = buttonStyle(
             smallFont,
-            new Color(0.09f, 0.09f, 0.10f, 1f),
-            new Color(0.16f, 0.16f, 0.18f, 1f),
-            new Color(0.06f, 0.06f, 0.07f, 1f),
+            new Color(0.035f, 0.09f, 0.13f, .42f),
+            new Color(0.10f, 0.20f, 0.25f, .78f),
+            new Color(0.02f, 0.06f, 0.10f, .80f),
             TEXT_MUTED,
-            new Color(0.23f, 0.20f, 0.15f, 1f));
+            new Color(0.40f, 0.53f, 0.57f, .45f));
         skin.add("quiet", quiet, TextButton.TextButtonStyle.class);
 
         TextButton.TextButtonStyle danger = buttonStyle(
@@ -262,18 +285,18 @@ public final class FantasyUiTheme implements Disposable {
         style.font = font;
         style.fontColor = TEXT_MUTED;
         style.overFontColor = TEXT_PRIMARY;
-        style.checkedFontColor = new Color(0.13f, 0.09f, 0.04f, 1f);
+        style.checkedFontColor = GOLD;
         style.up = new NinePatchDrawable(createPatch(
-            new Color(0.105f, 0.105f, 0.115f, 1f),
-            new Color(0.25f, 0.23f, 0.20f, 1f), 11, 1));
+            new Color(0.06f, 0.12f, 0.17f, .78f),
+            new Color(0.28f, 0.39f, 0.44f, .65f), 6, 1));
         style.over = new NinePatchDrawable(createPatch(
-            new Color(0.16f, 0.15f, 0.15f, 1f), BORDER, 11, 1));
+            new Color(0.12f, 0.23f, 0.28f, .90f), GOLD_DIM, 6, 1));
         style.down = new NinePatchDrawable(createPatch(
             new Color(0.08f, 0.075f, 0.08f, 1f), GOLD_DIM, 11, 1));
         style.checked = new NinePatchDrawable(createPatch(
-            new Color(0.73f, 0.55f, 0.24f, 1f), GOLD, 11, 2));
+            new Color(0.14f, 0.26f, 0.28f, .96f), GOLD, 6, 2));
         style.checkedOver = new NinePatchDrawable(createPatch(
-            new Color(0.84f, 0.65f, 0.29f, 1f), GOLD, 11, 2));
+            new Color(0.20f, 0.33f, 0.34f, 1f), GOLD, 6, 2));
         return style;
     }
 
@@ -306,35 +329,30 @@ public final class FantasyUiTheme implements Disposable {
         Random random = new Random(7319842L);
 
         for (int y = 0; y < height; y++) {
-            float t = y / (float) (height - 1);
-            float shade = 0.038f + t * 0.025f;
             for (int x = 0; x < width; x++) {
-                float noise = (random.nextFloat() - 0.5f) * 0.018f;
+                float noise = (random.nextFloat() - 0.5f) * 0.008f;
+                float glow=(float)Math.exp(-((x-150f)*(x-150f)+(y-100f)*(y-100f))/22000f);
                 pixmap.setColor(
-                    clamp(shade + noise),
-                    clamp(shade * 0.88f + noise),
-                    clamp(shade * 0.92f + noise),
+                    clamp(.018f + glow*.025f + noise),
+                    clamp(.04f + glow*.09f + noise),
+                    clamp(.07f + glow*.12f + noise),
                     1f);
                 pixmap.drawPixel(x, y);
             }
         }
 
-        // Staggered dungeon-stone joints.
-        pixmap.setColor(0.018f, 0.017f, 0.020f, 0.72f);
-        int rowHeight = 36;
-        int stoneWidth = 72;
-        for (int y = 0; y < height; y += rowHeight) {
-            pixmap.fillRectangle(0, y, width, 2);
-            int row = y / rowHeight;
-            int offset = (row % 2 == 0) ? 0 : stoneWidth / 2;
-            for (int x = offset; x < width; x += stoneWidth) {
-                pixmap.fillRectangle(x, y, 2, rowHeight);
-            }
+        // Quiet arcane engraving and stars, generated once rather than animated every frame.
+        pixmap.setColor(.5f,.65f,.68f,.10f);
+        pixmap.drawCircle(155,136,105);pixmap.drawCircle(155,136,110);
+        for(int i=0;i<12;i++) {
+            double a=i*Math.PI/6;
+            int x=155+(int)(105*Math.cos(a)),y=136+(int)(105*Math.sin(a));
+            pixmap.drawLine(x-3,y,x+3,y);pixmap.drawLine(x,y-3,x,y+3);
         }
-
-        // Warm torch glows frame the menu without requiring image assets.
-        addGlow(pixmap, 70, height / 2, 92);
-        addGlow(pixmap, width - 70, height / 2, 92);
+        for(int i=0;i<85;i++) {
+            pixmap.setColor(.7f,.8f,.83f,.12f+random.nextFloat()*.2f);
+            pixmap.drawPixel(random.nextInt(width),random.nextInt(height));
+        }
 
         // Vignette.
         for (int i = 0; i < 58; i++) {
@@ -357,19 +375,11 @@ public final class FantasyUiTheme implements Disposable {
         return texture;
     }
 
-    private void addGlow(Pixmap pixmap, int centerX, int centerY, int radius) {
-        for (int r = radius; r >= 4; r -= 4) {
-            float strength = 1f - r / (float) radius;
-            pixmap.setColor(0.70f, 0.25f, 0.045f, 0.004f + strength * 0.018f);
-            pixmap.fillCircle(centerX, centerY, r);
-        }
-        pixmap.setColor(0.95f, 0.58f, 0.16f, 0.65f);
-        pixmap.fillCircle(centerX, centerY, 4);
-    }
-
     private NinePatch createPatch(Color fill, Color border, int radius, int borderWidth) {
         int size = 64;
         Pixmap pixmap = new Pixmap(size, size, Pixmap.Format.RGBA8888);
+        // Replacement blending keeps translucent interiors truly translucent over the border.
+        pixmap.setBlending(Pixmap.Blending.None);
         pixmap.setColor(0f, 0f, 0f, 0f);
         pixmap.fill();
 
@@ -392,6 +402,26 @@ public final class FantasyUiTheme implements Disposable {
 
         int split = 16;
         return new NinePatch(texture, split, split, split, split);
+    }
+
+    /** Slim gilded resource track with a bevelled, coloured glass fill. */
+    public Drawable resourceTrack() {
+        var drawable=new NinePatchDrawable(createPatch(new Color(.02f,.06f,.09f,.62f),GOLD_DIM,5,1));
+        drawable.setMinHeight(22);drawable.setMinWidth(0);
+        drawable.setLeftWidth(2);drawable.setRightWidth(2);drawable.setTopHeight(2);drawable.setBottomHeight(2);
+        return drawable;
+    }
+    public Drawable resourceFill(Color base) {
+        Pixmap p=new Pixmap(8,24,Pixmap.Format.RGBA8888);
+        for(int y=0;y<24;y++) {
+            float light=y<5?1.2f:y<12?1f:.73f;
+            p.setColor(clamp(base.r*light),clamp(base.g*light),clamp(base.b*light),.94f);
+            p.fillRectangle(0,y,8,1);
+        }
+        p.setColor(1,1,1,.3f);p.drawLine(0,1,7,1);
+        Texture t=new Texture(p);p.dispose();textures.add(t);
+        var fill=new TextureRegionDrawable(t);fill.setMinWidth(0);fill.setMinHeight(18);
+        return fill;
     }
 
     private void drawRoundedRect(Pixmap pixmap, int x, int y, int width, int height, int radius) {

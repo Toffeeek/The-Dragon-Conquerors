@@ -243,9 +243,16 @@ public class StatusEffectEngine {
             environment == Environment.LAVA ? LAVA_BURN_TURNS : hazard.getDefaultDuration());
 
         // 2. Damage over time.
+        var credits = new ArrayList<TurnStartReport.DamageCredit>();
+        int creditHp = combatant.getStats().getHp();
         int damage = 0;
         for (StatusEffect effect : effects) {
             damage += effect.damageThisTurn();
+            int actual = Math.min(creditHp, effect.damageThisTurn());
+            if (actual > 0) {
+                creditHp -= actual;
+                credits.add(new TurnStartReport.DamageCredit(effect.getSourcePlayerId(),actual,creditHp==0));
+            }
         }
         boolean died = false;
         if (damage > 0) {
@@ -267,6 +274,8 @@ public class StatusEffectEngine {
 
             StatusEffectType type = effect.getType();
             if (effect.killsOnExpiry()) {
+                int remainingHp = combatant.getStats().getHp();
+                if (remainingHp > 0) credits.add(new TurnStartReport.DamageCredit(effect.getSourcePlayerId(),remainingHp,true));
                 combatant.getStats().setHp(0);
                 died = true;
                 lethal = type;
@@ -281,7 +290,7 @@ public class StatusEffectEngine {
         if (cooldowns != null) cooldowns.tick();
         if (!died) combatant.onTurnStart();
 
-        return new TurnStartReport(id, damage, died, stunned || died, expired, lethal);
+        return new TurnStartReport(id, damage, died, stunned || died, expired, lethal).withDamageCredits(credits);
     }
 
     // ──────────────────────────────────────────────────────────────────────

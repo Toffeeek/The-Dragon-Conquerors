@@ -36,7 +36,6 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /** Class -> race -> test start (or environment voting) for the multiplayer lobby. */
 public class LobbyScreen extends ScreenAdapter {
@@ -50,6 +49,7 @@ public class LobbyScreen extends ScreenAdapter {
     private Stage stage;
     private FantasyUiTheme theme;
     private Skin skin;
+    private com.github.thedragonconquerors.ui.PixelIcons icons;
     private Table selectionHost;
     private Label selectionSummaryLabel;
     private Label copyStatusLabel;
@@ -93,6 +93,7 @@ public class LobbyScreen extends ScreenAdapter {
     private void buildUi() {
         theme = new FantasyUiTheme();
         skin = theme.skin();
+        icons = new com.github.thedragonconquerors.ui.PixelIcons();
         stage = new Stage(new FitViewport(
             FantasyUiTheme.VIRTUAL_WIDTH, FantasyUiTheme.VIRTUAL_HEIGHT));
 
@@ -105,6 +106,7 @@ public class LobbyScreen extends ScreenAdapter {
         root.setFillParent(true);
         root.pad(30f, 42f, 30f, 42f);
         stage.addActor(root);
+        com.github.thedragonconquerors.ui.UiMotion.reveal(root);
 
         root.add(createTopBar()).growX().height(72f).row();
         Table content = new Table();
@@ -136,7 +138,7 @@ public class LobbyScreen extends ScreenAdapter {
             }
         });
 
-        Label title = new Label("PARTY ASSEMBLY", skin, "heading");
+        Label title = new Label("Gather the party", skin, "heading");
         title.setAlignment(Align.center);
         TextButton copyButton = new TextButton("COPY ADDRESS", skin, "secondary");
         copyButton.addListener(new ClickListener() {
@@ -147,9 +149,9 @@ public class LobbyScreen extends ScreenAdapter {
             }
         });
 
-        bar.add(leaveButton).width(170f).height(42f).left();
+        bar.add(leaveButton).width(210f).height(42f).left();
         bar.add(title).expandX().center();
-        bar.add(copyButton).width(180f).height(42f).right();
+        bar.add(copyButton).width(240f).height(42f).right();
         return bar;
     }
 
@@ -159,12 +161,12 @@ public class LobbyScreen extends ScreenAdapter {
         panel.pad(18f);
         panel.top().left();
 
-        Label heading = new Label("SESSION", skin, "heading");
-        Label connected = new Label("CONNECTED", skin, "section");
+        Label heading = new Label("Your hero", skin, "heading");
+        Label connected = new Label("CONNECTED", skin, "status");
         connected.setColor(FantasyUiTheme.SUCCESS);
         Label address = new Label(joinUrl, skin, "caption");
         address.setWrap(true);
-        copyStatusLabel = new Label("Share this address with the party.", skin, "caption");
+        copyStatusLabel = new Label("", skin, "caption");
         copyStatusLabel.setWrap(true);
 
         Label nameHeading = new Label("PLAYER NAME", skin, "section");
@@ -172,8 +174,8 @@ public class LobbyScreen extends ScreenAdapter {
         usernameField.setMaxLength(24);
 
         Label teamHeading = new Label("CHOOSE TEAM", skin, "section");
-        azureTeamButton = new TextButton("AZURE TEAM", skin, "team-blue");
-        crimsonTeamButton = new TextButton("CRIMSON TEAM", skin, "team-red");
+        azureTeamButton = new TextButton("AZURE", skin, "team-blue");
+        crimsonTeamButton = new TextButton("CRIMSON", skin, "team-red");
         azureTeamButton.setChecked(true);
         ButtonGroup<TextButton> teamGroup =
             new ButtonGroup<>(azureTeamButton, crimsonTeamButton);
@@ -195,7 +197,7 @@ public class LobbyScreen extends ScreenAdapter {
         playerCard.add(new Label("YOUR BUILD", skin, "section")).left().row();
         playerCard.add(selectionSummaryLabel).width(240f).left().padTop(7f).row();
 
-        lobbyStatusLabel = new Label("Not registered yet", skin, "caption");
+        lobbyStatusLabel = new Label("", skin, "caption");
         lobbyStatusLabel.setWrap(true);
 
         panel.add(heading).left().row();
@@ -251,14 +253,14 @@ public class LobbyScreen extends ScreenAdapter {
                 backButton.setDisabled(true);
                 nextButton.setDisabled(false);
                 nextButton.setText("CHOOSE RACE");
-                footerHelpLabel.setText("Choose a class and inspect its base stats.");
+                footerHelpLabel.setText("01  CLASS");
                 break;
             case RACE:
                 selectionHost.add(createRacePanel()).grow();
                 backButton.setDisabled(joined);
                 nextButton.setDisabled(joined);
                 nextButton.setText("JOIN GAME");
-                footerHelpLabel.setText("Choose a race, then join the game.");
+                footerHelpLabel.setText("02  RACE");
                 break;
             case ENVIRONMENT:
                 if (testingMode || localPlayerId < 0) {
@@ -266,37 +268,34 @@ public class LobbyScreen extends ScreenAdapter {
                     backButton.setDisabled(true);
                     nextButton.setDisabled(!roomReady || startRequested);
                     nextButton.setText(!roomReady ? "JOINING..."
-                        : startRequested ? "STARTING..." : "START TEST");
-                    footerHelpLabel.setText("Choose a map, then start alone or with friends.");
+                        : startRequested ? "STARTING..." : "START BATTLE");
+                    footerHelpLabel.setText("03  BATTLEFIELD");
                     break;
                 }
                 selectionHost.add(createEnvironmentPanel()).grow();
                 backButton.setDisabled(true);
                 nextButton.setDisabled(true);
                 nextButton.setText(voteSent ? "VOTE SUBMITTED" : "JOINING...");
-                footerHelpLabel.setText("Step 3 of 3 - four votes start the match; tied leaders are randomised.");
+                footerHelpLabel.setText("03  BATTLEFIELD");
                 break;
             default:
                 throw new IllegalStateException("Unknown selection step: " + step);
         }
         updateSelectionSummary();
+        com.github.thedragonconquerors.ui.UiMotion.reveal(selectionHost);
     }
 
-    private Table panel(String title, String hint) {
+    private Table panel(String title) {
         Table panel = new Table();
         panel.setBackground(theme.panel());
         panel.pad(22f, 26f, 22f, 26f);
         panel.top().left();
-        panel.add(new Label(title, skin, "heading")).left().row();
-        Label hintLabel = new Label(hint, skin, "caption");
-        hintLabel.setWrap(true);
-        panel.add(hintLabel).width(700f).left().padTop(6f).padBottom(12f).row();
+        panel.add(new Label(title, skin, "heading")).left().padBottom(18).row();
         return panel;
     }
 
     private Table createClassPanel() {
-        Table panel = panel("CHOOSE YOUR CLASS",
-            "Base design tiers are shown below. Ability balance compensates for different stat totals.");
+        Table panel = panel("Choose your class");
         Table grid = new Table();
         ButtonGroup<TextButton> group = new ButtonGroup<>();
         group.setMinCheckCount(1);
@@ -308,6 +307,9 @@ public class LobbyScreen extends ScreenAdapter {
                 value.displayName.toUpperCase() + "\n" + value.getRoleLabel(), skin, "class-card");
             button.getLabel().setWrap(true);
             button.getLabel().setAlignment(Align.center);
+            button.clearChildren();
+            button.add(new com.github.thedragonconquerors.ui.CharacterPortrait(game.getAssetService(),value,false)).size(60,70).row();
+            button.add(button.getLabel()).width(200).growY();
             button.setChecked(value == selectedClass);
             button.addListener(new ClickListener() {
                 @Override public void clicked(InputEvent event, float x, float y) {
@@ -316,28 +318,26 @@ public class LobbyScreen extends ScreenAdapter {
                 }
             });
             group.add(button);
-            grid.add(button).width(224f).height(84f).pad(5f);
+            grid.add(button).width(224f).minHeight(144f).fillY().pad(5f);
             if ((index + 1) % 3 == 0) grid.row();
         }
         panel.add(grid).left().row();
 
         Table details = detailBox();
-        details.add(new Label(selectedClass.displayName.toUpperCase(), skin, "class-title")).left().row();
-        details.add(new Label(descriptionFor(selectedClass), skin, "caption"))
-            .width(660f).left().padTop(6f).row();
         details.add(createClassTierTable(selectedClass)).left().padTop(10f).row();
-        String abilities = AbilityType.forClass(selectedClass).stream()
-            .map(AbilityType::getDisplayName).collect(Collectors.joining("  |  "));
-        Label abilityLabel = new Label("Abilities: " + abilities, skin, "caption");
-        abilityLabel.setWrap(true);
-        details.add(abilityLabel).width(660f).left().padTop(9f).row();
+        Table abilities=new Table();int abilityIndex=0;
+        for(var ability:AbilityType.forClass(selectedClass)) {
+            Table row=new Table();row.add(new Image(icons.drawable(com.github.thedragonconquerors.ui.PixelIcons.kind(ability)))).size(22).padRight(8);
+            row.add(new Label(ability.getDisplayName(),skin,"caption")).left().growX();
+            abilities.add(row).width(325).padBottom(6).left();if(++abilityIndex%2==0)abilities.row();
+        }
+        details.add(abilities).width(660).left().padTop(12).row();
         panel.add(details).width(700f).left().padTop(12f).row();
         return panel;
     }
 
     private Table createRacePanel() {
-        Table panel = panel("CHOOSE YOUR RACE",
-            "Preview the finished engine stats. Green values include this race's baseline and pairing bonuses.");
+        Table panel = panel("Choose your lineage");
         Table grid = new Table();
         ButtonGroup<TextButton> group = new ButtonGroup<>();
         group.setMinCheckCount(1);
@@ -346,7 +346,7 @@ public class LobbyScreen extends ScreenAdapter {
         for (int index = 0; index < races.length; index++) {
             Race value = races[index];
             CharacterBuild preview = CharacterBuild.of(value, selectedClass);
-            String marker = preview.isNamedSynergy() ? "NAMED SYNERGY" : "BALANCED AFFINITY";
+            String marker = preview.isNamedSynergy() ? "SYNERGY" : "";
             TextButton button = new TextButton(value.displayName.toUpperCase() + "\n" + marker,
                 skin, "class-card");
             button.getLabel().setWrap(true);
@@ -359,20 +359,17 @@ public class LobbyScreen extends ScreenAdapter {
                 }
             });
             group.add(button);
-            grid.add(button).width(330f).height(76f).pad(5f);
+            grid.add(button).width(330f).minHeight(76f).pad(5f);
             if ((index + 1) % 2 == 0) grid.row();
         }
         panel.add(grid).left().row();
 
         CharacterBuild build = CharacterBuild.of(selectedRace, selectedClass);
         Table details = detailBox();
-        details.add(new Label(build.displayName().toUpperCase(), skin, "class-title")).left().row();
-        Label description = new Label(selectedRace.getDescription(), skin, "caption");
-        description.setWrap(true);
-        details.add(description).width(660f).left().padTop(5f).row();
-        Label boosts = new Label(build.describeBoosts(), skin, "class-role");
+        Label boosts = new Label(build.describeBoosts(), skin, "status");
+        boosts.setWrap(true);
         boosts.setColor(FantasyUiTheme.SUCCESS);
-        details.add(boosts).left().padTop(8f).row();
+        details.add(boosts).width(650f).left().padTop(8f).row();
         details.add(createBoostedStatsTable(build.createBaseStats(), build.createStats()))
             .left().padTop(10f).row();
         panel.add(details).width(700f).left().padTop(12f).row();
@@ -380,17 +377,16 @@ public class LobbyScreen extends ScreenAdapter {
     }
 
     private Table createEnvironmentPanel() {
-        Table panel = panel("VOTE FOR THE BATTLEFIELD",
-            "The server counts one current vote per player. You may change your vote until all four players vote.");
+        Table panel = panel("Choose the battlefield");
         Table cards = new Table();
         ButtonGroup<TextButton> group = new ButtonGroup<>();
         group.setMinCheckCount(0);
         group.setMaxCheckCount(1);
         for (Environment environment : Environment.selectionOrder()) {
             int votes = voteCounts.getOrDefault(environment, 0);
-            String cardText = environment.getDisplayName().toUpperCase()
-                + "\n" + environment.hazardSummary() + "\nVOTES: " + votes;
+            String cardText = environment.name() + "\n" + hazardLabel(environment) + "\n" + votes + " votes";
             TextButton button = new TextButton(cardText, skin, "class-card");
+            addMapThumbnail(button,environment);
             button.getLabel().setWrap(true);
             button.getLabel().setAlignment(Align.center);
             button.setChecked(environment == selectedEnvironment);
@@ -402,15 +398,15 @@ public class LobbyScreen extends ScreenAdapter {
                 }
             });
             group.add(button);
-            cards.add(button).width(222f).height(120f).pad(5f);
+            cards.add(button).width(222f).minHeight(205f).fillY().pad(5f);
         }
         panel.add(cards).left().row();
+        panel.add(createPartySlots()).left().padTop(10).row();
 
         Table details = detailBox();
         String choice = selectedEnvironment == null
-            ? "Choose Bog, Lava, or Canyon to submit your vote."
-            : "Your vote: " + selectedEnvironment.getDisplayName() + " - "
-                + selectedEnvironment.getDescription();
+            ? "Select a battlefield"
+            : "Your vote: " + selectedEnvironment.name();
         Label choiceLabel = new Label(choice, skin, "default");
         choiceLabel.setWrap(true);
         details.add(choiceLabel).width(660f).left().row();
@@ -424,16 +420,16 @@ public class LobbyScreen extends ScreenAdapter {
     }
 
     private Table createTestingPanel() {
-        Table panel = panel("CHOOSE YOUR TEST MAP",
-            "No votes or full party needed. The player pressing Start Test chooses the battlefield.");
+        Table panel = panel("Choose the battlefield");
         Table cards = new Table();
         ButtonGroup<TextButton> group = new ButtonGroup<>();
         group.setMinCheckCount(0);
         group.setMaxCheckCount(1);
         Environment choice = selectedEnvironment == null ? Environment.CANYON : selectedEnvironment;
         for (Environment environment : Environment.selectionOrder()) {
-            TextButton button = new TextButton(environment.getDisplayName().toUpperCase()
-                + "\n" + environment.hazardSummary(), skin, "class-card");
+            TextButton button = new TextButton(environment.name()
+                + "\n" + hazardLabel(environment), skin, "class-card");
+            addMapThumbnail(button,environment);
             button.getLabel().setWrap(true);
             button.getLabel().setAlignment(Align.center);
             group.add(button);
@@ -446,20 +442,44 @@ public class LobbyScreen extends ScreenAdapter {
                     Gdx.app.postRunnable(() -> showStep());
                 }
             });
-            cards.add(button).width(222f).height(120f).pad(5f);
+            cards.add(button).width(222f).minHeight(195f).pad(5f);
         }
         panel.add(cards).left().row();
-        Label selected = new Label("Selected: " + choice.getDisplayName()
-            + " - " + choice.getDescription(), skin, "default");
-        selected.setWrap(true);
-        panel.add(selected).width(660f).left().padTop(14f).row();
-        Label details = new Label("Players connected: " + connectedPlayers
-            + "\n\nStart with 1-4 players. No full party is required."
-            + "\nSolo play stays open for movement and ability testing."
-            + "\n\nPress Esc in the battlefield to return to the menu.", skin, "default");
-        details.setWrap(true);
-        panel.add(details).width(660f).left().padTop(18f).row();
+        panel.add(createPartySlots()).left().padTop(10).row();
+        panel.add(new Label(connectedPlayers+" / 4 players  |  Solo ready",skin,"caption")).left().padTop(14).row();
         return panel;
+    }
+
+    private static String hazardLabel(Environment environment) {
+        return switch(environment) {case CANYON->"Fatal falls";case LAVA->"Burn / lethal lava";case BOG->"Poison";};
+    }
+
+    private void addMapThumbnail(TextButton button,Environment environment) {
+        Image image=new Image(game.getAssetService().load(com.github.thedragonconquerors.assets.BattlefieldImageAssets.forEnvironment(environment)));
+        image.setScaling(Scaling.fit);button.clearChildren();
+        button.add(image).size(202,116).padBottom(10).row();
+        button.add(button.getLabel()).width(200).growY();
+    }
+    private Table createPartySlots() {
+        Table parties=new Table();
+        for(int team=1;team<=2;team++) {
+            Table party=new Table();party.setBackground(theme.inset());party.pad(9);
+            party.add(new Label((team==1?"A / AZURE":"B / CRIMSON")+(team==selectedTeam?"  - YOU":""),skin,"section")).left().row();
+            final int teamId=team;
+            var members=roster.values().stream().filter(p->p.getTeamIndex()==teamId).toList();
+            for(int slot=0;slot<2;slot++) {
+                Table row=new Table();
+                if(slot<members.size()) {
+                    Packet player=members.get(slot);
+                    row.add(new com.github.thedragonconquerors.ui.CharacterPortrait(game.getAssetService(),player.getCharacterClass(),false)).size(30,38);
+                    Label label=new Label((player.getID()==localPlayerId?"YOU - ":"")+player.getUsername(),skin,"caption");label.setEllipsis(true);
+                    row.add(label).width(260).left();
+                } else row.add(new Label("Open slot",skin,"caption")).width(290).height(38).left();
+                party.add(row).left().row();
+            }
+            parties.add(party).width(340).padRight(10);
+        }
+        return parties;
     }
 
     private Table detailBox() {
@@ -547,6 +567,7 @@ public class LobbyScreen extends ScreenAdapter {
         if (packet == null || packet.getAction() == null) return;
         switch (packet.getAction()) {
             case PRIVATE_JOIN_CONFIRMATION:
+                roster.clear();
                 localPlayerId = packet.getID();
                 testingMode = packet.isTestingMode();
                 connectedPlayers = Math.max(connectedPlayers, packet.getConnectedPlayers());
@@ -559,6 +580,7 @@ public class LobbyScreen extends ScreenAdapter {
                 break;
             case ROOM_READY:
                 roomReady = true;
+                if (packet.getMatchState() == null) startRequested = false;
                 showStep();
                 break;
             case PLAYER_COORDINATE:
@@ -579,6 +601,8 @@ public class LobbyScreen extends ScreenAdapter {
                 break;
             case LEAVE:
                 roster.remove(packet.getID());
+                connectedPlayers=roster.size();
+                if(step==Step.ENVIRONMENT)showStep();
                 break;
             case ERROR:
                 if (localPlayerId >= 0) {
@@ -635,18 +659,6 @@ public class LobbyScreen extends ScreenAdapter {
         return name.isEmpty() ? "Player" : name;
     }
 
-    private String descriptionFor(CharacterClass characterClass) {
-        switch (characterClass) {
-            case PALADIN: return "Durable frontline fighter with Sacred Bolt and heavy single-target Divine Smite.";
-            case MAGE: return "High-damage caster using fire, ice, displacement, and a one-turn stun.";
-            case WRAITH: return "Fast assassin with poison, a breakable death curse, and unrestricted Teleport.";
-            case CLERIC: return "Battlefield healer and the only class capable of reviving a fallen teammate.";
-            case BARD: return "Support specialist that boosts allies and restores a teammate's ultimate.";
-            case ARCHER: return "Long-range attacker with self-accuracy support and an area-damage ultimate.";
-            default: return "A versatile combatant.";
-        }
-    }
-
     @Override
     public void render(float delta) {
         ScreenUtils.clear(0.02f, 0.018f, 0.022f, 1f);
@@ -655,6 +667,7 @@ public class LobbyScreen extends ScreenAdapter {
             return;
         }
         stage.act(Math.min(delta, 1f / 15f));
+        if(theme.refreshTextScale())for(var actor:stage.getActors())com.github.thedragonconquerors.ui.UiMotion.relayout(actor);
         stage.draw();
     }
 
@@ -667,9 +680,11 @@ public class LobbyScreen extends ScreenAdapter {
     @Override public void dispose() {
         if (stage != null) stage.dispose();
         if (theme != null) theme.dispose();
+        if (icons != null) icons.dispose();
         stage = null;
         theme = null;
         skin = null;
+        icons = null;
     }
 
 }

@@ -6,17 +6,16 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Disposable;
 import com.github.thedragonconquerors.assets.AssetService;
 import com.github.thedragonconquerors.assets.SpriteAssets;
-import com.github.thedragonconquerors.animation.PlayerAnimationController;
 import com.github.thedragonconquerors.entities.Player;
 import com.github.thedragonconquerors.movement.NavGrid;
 import com.shared.shared.model.CharacterClass;
 
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,44 +24,74 @@ public class PlayerRenderer implements Disposable {
     public static final float TILE_SIZE = 1f;
     public static final float TARGET_CLICK_RADIUS = 0.72f;
 
-    private static final int FRAME_WIDTH = 96;
-    private static final int FRAME_HEIGHT = 96;
-    private static final float SPRITE_WIDTH = 1.48f;
-    private static final float SPRITE_HEIGHT = 1.48f;
-    private static final float SPRITE_Y_OFFSET = -0.48f;
+    // The 100px cells contain ~20-30px bodies; feet are anchored at source (50,59).
+    private static final float SPRITE_WIDTH = 4f;
+    private static final float SPRITE_HEIGHT = 4f;
+    private static final float SPRITE_Y_OFFSET = -1.64f;
 
-    private static final Color COLOR_PLAYER_RING = new Color(1f, 1f, 1f, 0.85f);
     private static final Color COLOR_STAMINA_BG = new Color(0.12f, 0.12f, 0.15f, 0.9f);
     private static final Color COLOR_STAMINA_FILL = new Color(0.1f, 0.9f, 0.3f, 1f);
     private static final Color COLOR_HP_BG = new Color(0.12f, 0.12f, 0.15f, 0.9f);
-    private static final Color COLOR_HP_FILL = new Color(0.85f, 0.15f, 0.15f, 1f);
+    private static final Color COLOR_ALLY = new Color(0.18f, 0.86f, 0.35f, 1f);
+    private static final Color COLOR_OPPONENT = new Color(0.94f, 0.22f, 0.22f, 1f);
     private static final Color COLOR_REACHABLE = new Color(0.08f, 0.42f, 1f, 0.38f);
     private static final Color COLOR_ACTIVE_TURN = new Color(1f, 0.82f, 0.25f, 1f);
-    private static final Color COLOR_TARGET_IN_RANGE = new Color(0.25f, 1f, 0.35f, 0.95f);
-    private static final Color COLOR_TARGET_OUT_OF_RANGE = new Color(1f, 0.25f, 0.2f, 0.95f);
-    private static final Color COLOR_TEAM_AZURE = new Color(0.2f, 0.55f, 1f, 0.95f);
-    private static final Color COLOR_TEAM_CRIMSON = new Color(0.95f, 0.2f, 0.2f, 0.95f);
 
     private final ShapeRenderer shapeRenderer = new ShapeRenderer();
     private final Batch spriteBatch;
     private final AssetService assetService;
-    private final Map<CharacterClass, TextureRegion[][]> sheetCache = new EnumMap<>(CharacterClass.class);
+    private final Map<SpriteAssets.Clip, TextureRegion[]> sheetCache = new java.util.HashMap<>();
 
     private List<Vector2> cachedReachable;
     private float lastRemainingDistance = -1f;
     private final Vector2 lastReachablePosition = new Vector2(Float.NaN, Float.NaN);
     private int lastGridRevision = -1;
-    private float pulseTime = 0f;
+    private final ShaderProgram tintShader;
+    private final Map<Integer,HealthFlash> flashes=new java.util.HashMap<>();
+    public void hitFlash(int id,float delay) { flashes.put(id,new HealthFlash(HealthFlash.Kind.DAMAGE,delay)); }
+    public void healFlash(int id,float delay) { flashes.put(id,new HealthFlash(HealthFlash.Kind.HEAL,delay)); }
+    private void advanceFlash(Player p,float delta) {
+        HealthFlash flash=flashes.get(p.getId());if(flash==null)return;
+        flash.advance(delta);
+        if(flash.finished())flashes.remove(p.getId());
+    }
 
     public PlayerRenderer(AssetService assetService, Batch spriteBatch) {
         this.assetService = assetService;
         this.spriteBatch = spriteBatch;
+        tintShader = new ShaderProgram("""
+            attribute vec4 a_position;
+            attribute vec4 a_color;
+            attribute vec2 a_texCoord0;
+            uniform mat4 u_projTrans;
+            varying vec4 v_color;
+            varying vec2 v_texCoords;
+            void main() {
+                v_color=a_color; v_color.a *= 255.0/254.0;
+                v_texCoords=a_texCoord0; gl_Position=u_projTrans*a_position;
+            }
+            """, """
+            #ifdef GL_ES
+            precision mediump float;
+            #endif
+            varying vec4 v_color;
+            varying vec2 v_texCoords;
+            uniform sampler2D u_texture;
+            uniform vec3 u_teamTint;
+            uniform float u_tintStrength;
+            void main() {
+                vec4 original=texture2D(u_texture,v_texCoords)*v_color;
+                // A light colour wash, not a replacement silhouette. Preserve texture alpha.
+                gl_FragColor=vec4(mix(original.rgb,u_teamTint,u_tintStrength),original.a);
+            }
+            """);
+        if (!tintShader.isCompiled()) throw new com.badlogic.gdx.utils.GdxRuntimeException(tintShader.getLog());
     }
 
-    public void renderLocal(Player player, Matrix4 projection, NavGrid navGrid, float delta, boolean showMovement) {
+    public void renderLocal(Player player, Matrix4 projection, NavGrid navGrid, float delta, boolean showMovement, boolean hovered) {
+        advanceFlash(player,delta);
         player.getAnimationController().update(
             delta, player.getPosition(), player.getMovementController());
-        pulseTime += delta;
 
         float remaining = player.getMovementController().getRemainingMovementDistance();
         if (showMovement && navGrid != null && !player.getMovementController().isMoving()
@@ -79,28 +108,20 @@ public class PlayerRenderer implements Disposable {
         }
 
         if (showMovement && !player.getMovementController().isMoving()) drawReachable(projection);
-        drawCharacter(player, projection);
-        drawBars(player, projection, true);
-        drawRing(player, projection, teamColor(player), 0.43f);
-        drawActiveTurn(player, projection);
+        drawCharacter(player, projection, true, hovered);
+        drawBars(player, projection, true, true);
+        drawIdentity(player, projection, true);
     }
 
-    public void renderEnemy(Player player, Matrix4 projection, float delta,
-                            boolean targetSelectionActive, boolean inRange) {
+    public void renderRemote(Player player, Matrix4 projection, float delta, int localTeam, boolean hovered) {
+        advanceFlash(player,delta);
         player.getAnimationController().update(
             delta, player.getPosition(), player.getMovementController());
 
-        if (targetSelectionActive) {
-            float pulse = 0.47f + 0.04f * (float) Math.sin(pulseTime * 6f);
-            drawRing(player, projection,
-                inRange ? COLOR_TARGET_IN_RANGE : COLOR_TARGET_OUT_OF_RANGE, pulse);
-        } else {
-            drawRing(player, projection, teamColor(player), 0.40f);
-        }
-
-        drawCharacter(player, projection);
-        drawBars(player, projection, false);
-        drawActiveTurn(player, projection);
+        boolean ally = isAlly(localTeam, player.getTeamIndex());
+        drawCharacter(player, projection, ally, hovered);
+        drawBars(player, projection, false, ally);
+        drawIdentity(player, projection, false);
     }
 
     private void drawReachable(Matrix4 projection) {
@@ -118,7 +139,7 @@ public class PlayerRenderer implements Disposable {
         com.badlogic.gdx.Gdx.gl.glDisable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
     }
 
-    private void drawCharacter(Player player, Matrix4 projection) {
+    private void drawCharacter(Player player, Matrix4 projection, boolean ally, boolean hovered) {
         TextureRegion frame = currentFrame(player);
         float x = player.getPosition().x - SPRITE_WIDTH / 2f;
         float y = player.getPosition().y + SPRITE_Y_OFFSET;
@@ -126,74 +147,70 @@ public class PlayerRenderer implements Disposable {
         if (frame != null) {
             spriteBatch.setProjectionMatrix(projection);
             spriteBatch.setColor(Color.WHITE);
+            HealthFlash flash=flashes.get(player.getId());
+            boolean flashing=flash!=null && flash.active() && !com.github.thedragonconquerors.ui.PresentationSettings.reducedMotion();
+            ShaderProgram previousShader=spriteBatch.getShader();
+            boolean tint=hovered || flashing;
+            if(tint)spriteBatch.setShader(tintShader);
             spriteBatch.begin();
-            spriteBatch.draw(frame, x, y, SPRITE_WIDTH, SPRITE_HEIGHT);
+            if(tint) {
+                Color color=flashing ? (flash.kind==HealthFlash.Kind.HEAL?COLOR_ALLY:COLOR_OPPONENT)
+                    : (ally?COLOR_ALLY:COLOR_OPPONENT);
+                tintShader.setUniformf("u_teamTint",color.r,color.g,color.b);
+                tintShader.setUniformf("u_tintStrength",flashing?.48f:.28f);
+            }
+            boolean flip = player.getAnimationController().isFacingLeft();
+            spriteBatch.draw(frame, flip ? x + SPRITE_WIDTH : x, y,
+                flip ? -SPRITE_WIDTH : SPRITE_WIDTH, SPRITE_HEIGHT);
             spriteBatch.end();
+            if(tint)spriteBatch.setShader(previousShader);
+            spriteBatch.setColor(Color.WHITE);
             return;
         }
 
         shapeRenderer.setProjectionMatrix(projection);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-        shapeRenderer.setColor(fallbackColor(player.getCharacterClass()));
+        shapeRenderer.setColor(hovered ? (ally?COLOR_ALLY:COLOR_OPPONENT) : fallbackColor(player.getCharacterClass()));
         shapeRenderer.circle(player.getPosition().x, player.getPosition().y, 0.35f, 16);
         shapeRenderer.end();
     }
 
     private TextureRegion currentFrame(Player player) {
-        TextureRegion[][] sheet = sheetFor(player.getCharacterClass());
+        TextureRegion[] sheet = sheetFor(player.getAnimationController().getClip());
         if (sheet == null) return null;
 
-        int row = player.getAnimationController().getCurrentRow();
         int frame = player.getAnimationController().getCurrentFrame();
-        if (row < 0 || row >= sheet.length || frame < 0 || frame >= sheet[row].length) return null;
-        return sheet[row][frame];
+        return sheet[frame];
     }
 
-    private TextureRegion[][] sheetFor(CharacterClass characterClass) {
-        TextureRegion[][] cached = sheetCache.get(characterClass);
+    private TextureRegion[] sheetFor(SpriteAssets.Clip clip) {
+        TextureRegion[] cached = sheetCache.get(clip);
         if (cached != null) return cached;
 
-        Texture texture = assetService.tryGet(SpriteAssets.forClass(characterClass));
+        Texture texture = assetService.tryGet(clip);
         if (texture == null) return null;
 
         texture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        TextureRegion[][] split = TextureRegion.split(texture, FRAME_WIDTH, FRAME_HEIGHT);
-        if (split.length != 24) {
-            System.out.println("Invalid sprite sheet row count for " + characterClass
-                + ": expected 24, got " + split.length);
-            return null;
-        }
-        for (TextureRegion[] row : split) {
-            if (row.length != PlayerAnimationController.FRAMES_PER_ROW) {
-                System.out.println("Invalid sprite sheet column count for " + characterClass
-                    + ": expected " + PlayerAnimationController.FRAMES_PER_ROW
-                    + ", got " + row.length);
-                return null;
-            }
-        }
-        sheetCache.put(characterClass, split);
-        return split;
+        if (texture.getHeight() != 100 || texture.getWidth() != clip.frames() * 100)
+            throw new IllegalStateException("Incorrect animation strip dimensions: " + clip.path());
+        TextureRegion[] frames = TextureRegion.split(texture, 100, 100)[0];
+        sheetCache.put(clip, frames);
+        return frames;
     }
 
-    private void drawActiveTurn(Player player, Matrix4 projection) {
-        if (player.isActiveTurn() && player.isAlive()) {
-            drawRing(player, projection, COLOR_ACTIVE_TURN, 0.51f + 0.025f * (float) Math.sin(pulseTime * 4f));
-        }
-    }
-
-    private void drawBars(Player player, Matrix4 projection, boolean showStamina) {
+    private void drawBars(Player player, Matrix4 projection, boolean showStamina, boolean ally) {
         float x = player.getPosition().x;
         float y = player.getPosition().y;
         float barWidth = 0.86f;
         float barHeight = 0.075f;
-        float hpRatio = (float) player.getStats().getHp() / player.getStats().getMaxHp();
+        float hpRatio = player.getStats().getMaxHp()<=0?0:(float) player.getStats().getHp() / player.getStats().getMaxHp();
 
         shapeRenderer.setProjectionMatrix(projection);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(COLOR_HP_BG);
-        shapeRenderer.rect(x - barWidth / 2f, y + 0.67f, barWidth, barHeight);
-        shapeRenderer.setColor(COLOR_HP_FILL);
-        shapeRenderer.rect(x - barWidth / 2f, y + 0.67f,
+        shapeRenderer.rect(x - barWidth / 2f, y + 1.25f, barWidth, barHeight);
+        shapeRenderer.setColor(ally?COLOR_ALLY:COLOR_OPPONENT);
+        shapeRenderer.rect(x - barWidth / 2f, y + 1.25f,
             barWidth * Math.max(0f, hpRatio), barHeight);
 
         if (showStamina) {
@@ -209,17 +226,41 @@ public class PlayerRenderer implements Disposable {
         shapeRenderer.end();
     }
 
-    private void drawRing(Player player, Matrix4 projection, Color color, float radius) {
+    private void drawIdentity(Player player, Matrix4 projection, boolean local) {
+        if(!local && !(player.isActiveTurn() && player.isAlive()))return;
         shapeRenderer.setProjectionMatrix(projection);
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        shapeRenderer.setColor(color);
-        shapeRenderer.circle(player.getPosition().x, player.getPosition().y, radius, 24);
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        float x=player.getPosition().x,y=player.getPosition().y;
+        if(local) {
+            shapeRenderer.setColor(COLOR_HP_BG);
+            shapeRenderer.triangle(x-.17f,y+1.72f,x+.17f,y+1.72f,x,y+1.44f);
+            shapeRenderer.setColor(player.isActiveTurn()?COLOR_ACTIVE_TURN:Color.WHITE);
+            shapeRenderer.triangle(x-.12f,y+1.68f,x+.12f,y+1.68f,x,y+1.49f);
+        } else {
+            shapeRenderer.setColor(COLOR_ACTIVE_TURN);
+            shapeRenderer.rect(x-.43f,y+1.37f,.86f,.045f);
+        }
         shapeRenderer.end();
     }
 
-    private Color teamColor(Player player) {
-        if (player == null) return COLOR_PLAYER_RING;
-        return player.getTeamIndex() == 1 ? COLOR_TEAM_AZURE : COLOR_TEAM_CRIMSON;
+    public static boolean isAlly(int localTeam, int otherTeam) { return localTeam==otherTeam; }
+
+    /** Body-only hover, independent of action mode, turn ownership and attack range. */
+    public static Player hoveredPlayer(Player local, Iterable<Player> others, Vector2 pointer) {
+        Player best=overBody(local,pointer)?local:null;
+        float distance=best==null?Float.MAX_VALUE:hoverDistance(best,pointer);
+        for(Player p:others) if(overBody(p,pointer)) {
+            float next=hoverDistance(p,pointer);
+            if(next<=distance){best=p;distance=next;}
+        }
+        return best;
+    }
+    private static boolean overBody(Player p,Vector2 point) {
+        return p!=null && point!=null && Math.abs(point.x-p.getPosition().x)<=.45f
+            && point.y>=p.getPosition().y-.12f && point.y<=p.getPosition().y+1.2f;
+    }
+    private static float hoverDistance(Player p,Vector2 point) {
+        return point.dst2(p.getPosition().x,p.getPosition().y+.5f);
     }
 
     /**
@@ -245,5 +286,6 @@ public class PlayerRenderer implements Disposable {
     @Override
     public void dispose() {
         shapeRenderer.dispose();
+        tintShader.dispose();
     }
 }

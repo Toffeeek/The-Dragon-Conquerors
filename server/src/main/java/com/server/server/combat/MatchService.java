@@ -49,6 +49,9 @@ public class MatchService {
     public synchronized MatchState snapshot() {
         return match == null ? null : match.snapshot();
     }
+    public synchronized MatchState setConnected(int id, boolean connected) {
+        return match == null ? null : match.setConnected(id, connected);
+    }
 
     public synchronized boolean isRunning() {
         return match != null;

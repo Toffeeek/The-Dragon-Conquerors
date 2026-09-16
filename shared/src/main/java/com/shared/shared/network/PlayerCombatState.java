@@ -23,6 +23,8 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PlayerCombatState {
+    @Builder.Default
+    private boolean connected = true;
     private int id;
     private String username;
     private CharacterClass characterClass;

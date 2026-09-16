@@ -15,8 +15,6 @@ import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import lombok.Getter;
 import com.shared.shared.model.world.BattlefieldDefinition;
-import com.shared.shared.model.world.BattlefieldZone;
-import com.shared.shared.model.world.BattlefieldZoneType;
 
 import java.util.*;
 
@@ -55,7 +53,7 @@ public class NavGrid {
         if (battlefield != null) {
             sharedNavigation = new com.shared.shared.model.world.BattlefieldNavigation(battlefield);
             for (int c = 0; c < cols; c++) for (int r = 0; r < rows; r++) {
-                walkable[c][r] = battlefield.isWalkable(nodeToWorld(c, r));
+                walkable[c][r] = sharedNavigation.isNodeWalkable(c, r);
             }
             return;
         }
@@ -77,23 +75,12 @@ public class NavGrid {
         List<Rectangle> cliffEdgeRects = buildObjectLayerRectangles(map, "CliffEdges", unitScale);
         markBlockedRectangles(cliffEdgeRects);
 
-        List<Rectangle> authoritativeZones = new ArrayList<>();
-        if (battlefield != null) {
-            for (BattlefieldZone zone : battlefield.getZones()) {
-                if (zone.getType() == BattlefieldZoneType.HAZARD) continue;
-                authoritativeZones.add(new Rectangle(zone.getX(), zone.getY(),
-                    zone.getWidth(), zone.getHeight()));
-            }
-            markBlockedRectangles(authoritativeZones);
-        }
-
         System.out.println(
             "NavGrid: " + cols + "x" + rows +
                 " nodes, unitScale=" + unitScale +
                 ", blockedPolygons=" + blockedPolygons.size() +
                 ", dropZoneRects=" + dropZoneRects.size() +
                 ", cliffEdgeRects=" + cliffEdgeRects.size()
-                + ", authoritativeZones=" + authoritativeZones.size()
         );
     }
 

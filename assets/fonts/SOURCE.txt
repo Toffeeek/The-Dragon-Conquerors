@@ -1,0 +1,4 @@
+Inter-Regular.otf is copied unchanged from the installed JetBrains Runtime font distribution.
+Upstream project: https://github.com/rsms/inter
+License source: https://raw.githubusercontent.com/rsms/inter/master/LICENSE.txt
+Redistribution license: SIL Open Font License 1.1; see OFL.txt.

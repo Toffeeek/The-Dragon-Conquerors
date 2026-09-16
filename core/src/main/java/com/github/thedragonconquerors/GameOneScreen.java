@@ -27,6 +27,7 @@ import com.github.thedragonconquerors.movement.MovementSystem;
 import com.github.thedragonconquerors.movement.NavGrid;
 import com.github.thedragonconquerors.rendering.HudRenderer;
 import com.github.thedragonconquerors.rendering.PlayerRenderer;
+import com.github.thedragonconquerors.rendering.AbilityEffectsRenderer;
 import com.github.thedragonconquerors.rendering.BattlefieldOverlayRenderer;
 import com.shared.shared.model.Action;
 import com.shared.shared.model.CharacterBuild;
@@ -81,6 +82,16 @@ public class GameOneScreen extends ScreenAdapter {
     private int localPlayerId;
     private boolean receivingInitialPlayerList = false;
     private boolean postMatchShown;
+    private MatchState pendingPostMatch;
+    private float postMatchDelay;
+    private boolean receivedMatchState;
+    private long lastSeenActionSequence;
+    private AbilityEffectsRenderer abilityEffects;
+    private com.github.thedragonconquerors.rendering.TacticalRenderer tactical;
+    private com.github.thedragonconquerors.rendering.AmbientRenderer ambience;
+    private com.github.thedragonconquerors.rendering.SurfaceAnimationRenderer surfaceAnimation;
+    private com.github.thedragonconquerors.rendering.ImpactRenderer impacts;
+    private com.github.thedragonconquerors.ui.BattleMenu battleMenu;
 
     private PlayerRenderer playerRenderer;
     private MouseInputHandler mouseInputHandler;
@@ -130,6 +141,7 @@ public class GameOneScreen extends ScreenAdapter {
         if (imageAsset != null) {
             battlefieldImage = assetService.load(imageAsset);
             battlefieldImage.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            surfaceAnimation=new com.github.thedragonconquerors.rendering.SurfaceAnimationRenderer(battlefield);
         } else {
             map = assetService.load(com.github.thedragonconquerors.assets.MapAssets.forEnvironment(environment));
             mapRenderer = new OrthogonalTiledMapRenderer(map, Main.UNIT_SCALE, batch);
@@ -139,18 +151,17 @@ public class GameOneScreen extends ScreenAdapter {
         movementSystem.setNavGrid(navGrid);
         battlefieldOverlay = new BattlefieldOverlayRenderer(battlefield);
 
-        for (SpriteAssets sprite : SpriteAssets.values()) {
-            try {
-                assetService.load(sprite);
-            } catch (Exception exception) {
-                System.out.println("Sprite sheet could not be loaded: " + sprite.name()
-                    + " (" + exception.getMessage() + ")");
-            }
-        }
+        for (SpriteAssets sprite : SpriteAssets.values())
+            for (SpriteAssets.Clip clip : sprite.clips()) assetService.load(clip);
 
         playerRenderer = new PlayerRenderer(assetService, batch);
+        abilityEffects = new AbilityEffectsRenderer(assetService, batch);
+        tactical = new com.github.thedragonconquerors.rendering.TacticalRenderer();
+        ambience = new com.github.thedragonconquerors.rendering.AmbientRenderer(battlefield);
+        impacts = new com.github.thedragonconquerors.rendering.ImpactRenderer();
         hudRenderer = new HudRenderer(availableActions, interaction, this::chooseMove,
-            this::chooseAction, this::selectAction, this::endTurn, this::cancelInteraction);
+            this::chooseAction, this::selectAction, this::endTurn, this::cancelInteraction, assetService, this::openBattleMenu);
+        battleMenu = new com.github.thedragonconquerors.ui.BattleMenu(game::returnToMenu,hudRenderer::restartGuide);
         mouseInputHandler = new MouseInputHandler(
             camera, viewport, localPlayer, movementSystem,
             this::handleWorldClick, this::sendLocalMove);
@@ -177,42 +188,59 @@ public class GameOneScreen extends ScreenAdapter {
 
     @Override
     public void render(float delta) {
-        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
-            if (interaction.mode() != BattleInteraction.Mode.NONE || pendingTargetAction != null) {
-                cancelInteraction();
-            } else if (initialMatchState != null && initialMatchState.isTestingMode()) {
-                game.returnToMenu();
-                return;
-            }
+        if (networkClient.isReady() && Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            if(battleMenu.isOpen())battleMenu.close();else openBattleMenu();
         }
         movementSystem.update(localPlayer, delta);
         for (Player enemy : enemyPlayers) movementSystem.update(enemy, delta);
 
         ScreenUtils.clear(Color.BLACK);
+        BattlefieldArtwork activeArtwork=BattlefieldArtwork.forEnvironment(environment);
+        camera.position.x=(activeArtwork==null?Main.WORLD_WIDTH/2:activeArtwork.x+activeArtwork.width/2)+impacts.shakeOffset();
+        camera.update();
         viewport.apply();
         batch.setColor(Color.WHITE);
         if (battlefieldImage != null) {
-            BattlefieldArtwork artwork = BattlefieldArtwork.forEnvironment(environment);
-            batch.setProjectionMatrix(camera.combined);
-            batch.begin();
-            batch.draw(battlefieldImage, artwork.x, 0f, artwork.width, battlefield.getHeight());
-            batch.end();
+            surfaceAnimation.render(batch,battlefieldImage,camera.combined,delta);
         } else {
             mapRenderer.setView(camera);
             mapRenderer.render();
         }
         battlefieldOverlay.render(camera.combined);
+        ambience.render(camera.combined,delta);
+        updateTacticalPreview();
 
+        Player hovered = battleMenu.isOpen() || !networkClient.isReady() || hudRenderer.pointerOverUi() ? null
+            : PlayerRenderer.hoveredPlayer(localPlayer,enemyPlayers,viewport.unproject(new Vector2(Gdx.input.getX(),Gdx.input.getY())));
+        if(!battleMenu.isOpen() && networkClient.isReady()) {
+            int portraitId=hudRenderer.hoveredPortraitId();
+            if(portraitId>=0)hovered=portraitId==localPlayerId?localPlayer:playersById.get(portraitId);
+        }
         playerRenderer.renderLocal(localPlayer, camera.combined, navGrid, delta,
-            interaction.mode() == BattleInteraction.Mode.MOVE && interaction.canMove(localPlayer, anyPlayerMoving()));
+            interaction.mode() == BattleInteraction.Mode.MOVE && interaction.canMove(localPlayer, anyPlayerMoving()),hovered==localPlayer);
         for (Player enemy : enemyPlayers) {
-            boolean selecting = pendingTargetAction != null && isLegalTarget(enemy, pendingTargetAction);
-            boolean inRange = selecting && localPlayer.getPosition().dst(enemy.getPosition())
-                <= pendingTargetAction.getRange();
-            playerRenderer.renderEnemy(enemy, camera.combined, delta, selecting, inRange);
+            playerRenderer.renderRemote(enemy, camera.combined, delta, localPlayer.getTeamIndex(),hovered==enemy);
         }
 
+        abilityEffects.render(camera.combined, delta);
+        impacts.render(camera.combined,delta);
+        List<Player> visiblePlayers = new ArrayList<>(enemyPlayers); visiblePlayers.add(localPlayer);
+        tactical.feedback(batch, camera.combined, visiblePlayers, delta);
         hudRenderer.render(localPlayer, delta, anyPlayerMoving());
+        battleMenu.render(delta);
+        if (pendingPostMatch != null) {
+            battleMenu.close();
+            postMatchDelay -= delta;
+            if (postMatchDelay <= 0 && !anyPlayerMoving()) {
+                MatchState finished = pendingPostMatch;
+                pendingPostMatch = null;
+                game.showPostMatch(teamIndex, chosenBuild, environment, localPlayerId, finished);
+            }
+        }
+    }
+    private void openBattleMenu() {
+        if(!networkClient.isReady() || battleMenu==null)return;
+        cancelInteraction();battleMenu.open();
     }
 
     private void handlePacket(Packet packet) {
@@ -239,6 +267,7 @@ public class GameOneScreen extends ScreenAdapter {
                 removeEnemyPlayer(packet.getID());
                 break;
             case MATCH_STATE:
+            case MATCH_START:
                 applyMatchState(packet.getMatchState());
                 break;
             case ERROR:
@@ -436,10 +465,10 @@ public class GameOneScreen extends ScreenAdapter {
 
     private Player findClickedTarget(Vector2 clickedWorldPosition, AbilityType ability) {
         Player best = null;
-        float bestDistance = PlayerRenderer.TARGET_CLICK_RADIUS;
+        float bestDistance = Float.MAX_VALUE;
         if (isLegalTarget(localPlayer, ability)) {
             float localDistance = localPlayer.getPosition().dst(clickedWorldPosition);
-            if (localDistance <= bestDistance) {
+            if (com.github.thedragonconquerors.input.TacticalPreview.hitsBody(localPlayer.getPosition(), clickedWorldPosition) && localDistance <= bestDistance) {
                 best = localPlayer;
                 bestDistance = localDistance;
             }
@@ -447,12 +476,31 @@ public class GameOneScreen extends ScreenAdapter {
         for (Player enemy : enemyPlayers) {
             if (!isLegalTarget(enemy, ability)) continue;
             float distance = enemy.getPosition().dst(clickedWorldPosition);
-            if (distance <= bestDistance) {
+            if (com.github.thedragonconquerors.input.TacticalPreview.hitsBody(enemy.getPosition(), clickedWorldPosition) && distance <= bestDistance) {
                 best = enemy;
                 bestDistance = distance;
             }
         }
         return best;
+    }
+
+    private void updateTacticalPreview() {
+        AbilityType ability = pendingTargetAction != null ? pendingTargetAction : hudRenderer.hoveredAbility();
+        if (ability == null || !networkClient.isReady() || battleMenu.isOpen()) { hudRenderer.setPreview(""); return; }
+        Vector2 point = viewport.unproject(new Vector2(Gdx.input.getX(), Gdx.input.getY()));
+        boolean overUi = hudRenderer.pointerOverUi();
+        Player target = overUi ? null : findClickedTarget(point, ability);
+        boolean valid = ability.getTargetType().targetsGround()
+            ? battlefield.isWalkable(point) && localPlayer.getPosition().dst(point) <= ability.getRange()
+            : target != null && localPlayer.getPosition().dst(target.getPosition()) <= ability.getRange();
+        if (valid && ability == AbilityType.TELEPORT) valid = enemyPlayers.stream().noneMatch(p -> p.isAlive()
+            && p.getPosition().dst(point) < com.shared.shared.model.world.BattlefieldNavigation.PLAYER_SEPARATION);
+        tactical.preview(camera.combined, localPlayer, ability, overUi ? null : point, target, valid);
+        String text = com.github.thedragonconquerors.input.TacticalPreview.describe(localPlayer, ability, target);
+        String unavailable = hudRenderer.unavailableReason(localPlayer,ability,anyPlayerMoving());
+        if(!unavailable.isEmpty())text += "\n" + unavailable;
+        if (!overUi && ability.getTargetType().targetsGround() && !valid) text += "\nBlocked, occupied, or out of range.";
+        hudRenderer.setPreview(text);
     }
 
     private boolean hasAnyLegalTarget(AbilityType ability) {
@@ -529,25 +577,39 @@ public class GameOneScreen extends ScreenAdapter {
 
         Player actor = state.getLastActorId() == localPlayerId
             ? localPlayer : playersById.get(state.getLastActorId());
-        Player firstDamaged = null;
+        boolean newAction = receivedMatchState && state.getLastAbility() != null
+            && state.getActionSequence() > lastSeenActionSequence;
+        float impactDelay = 0;
+        if (newAction && actor != null) {
+            Vector2 origin = state.getLastActionOrigin() == null ? actor.getPosition() : state.getLastActionOrigin();
+            Vector2 target = state.getLastTargetPoint() == null ? actor.getPosition() : state.getLastTargetPoint();
+            actor.getAnimationController().playAbility(origin, target, state.getLastAbility());
+            float duration = actor.getAnimationController().getClip().duration();
+            impactDelay = duration * .65f;
+            abilityEffects.play(state.getLastAbility(), origin, target, duration);
+        }
         for (PlayerCombatState playerState : state.getPlayers()) {
             Player player = playerState.getId() == localPlayerId
                 ? localPlayer : playersById.get(playerState.getId());
             int before = previousHp.getOrDefault(playerState.getId(), playerState.getHp());
-            if (player != null && playerState.getHp() < before) {
-                if (firstDamaged == null) firstDamaged = player;
-                if (playerState.getHp() <= 0) player.getAnimationController().playDeath();
-                else if (actor != null) player.getAnimationController().playHurt(
-                    actor.getPosition(), player.getPosition());
+            if (player == null) continue;
+            if (before <= 0 && playerState.getHp() > 0) player.getAnimationController().revive();
+            if (!receivedMatchState && playerState.getHp() <= 0) player.getAnimationController().playDeath();
+            else if (receivedMatchState && playerState.getHp() < before) {
+                player.getAnimationController().queueReaction(playerState.getHp() <= 0, impactDelay);
+                tactical.add("-" + (before - playerState.getHp()), player.getPosition(), Color.SCARLET, impactDelay);
+                playerRenderer.hitFlash(player.getId(),impactDelay);
+                impacts.add(state.getLastActionOrigin(),player.getPosition(),newAction?state.getLastAbility():null,false,playerState.getHp()<=0,impactDelay);
+            } else if (receivedMatchState && playerState.getHp() > before) {
+                playerRenderer.healFlash(player.getId(),impactDelay);
+                tactical.add("+" + (playerState.getHp() - before), player.getPosition(), Color.GREEN, impactDelay);
+                impacts.add(null,player.getPosition(),newAction?state.getLastAbility():null,true,false,impactDelay);
             }
+            if (newAction && state.getMissedTargetIds() != null && state.getMissedTargetIds().contains(playerState.getId()))
+                tactical.add("MISS",player.getPosition(),Color.LIGHT_GRAY,impactDelay);
         }
-
-        if (actor != null && state.getLastAbility() != null) {
-            Vector2 target = firstDamaged == null
-                ? new Vector2(actor.getPosition()).add(0f, 1f) : firstDamaged.getPosition();
-            actor.getAnimationController().playAttack(actor.getPosition(), target,
-                state.getLastAbility().getManaCost() > 0);
-        }
+        lastSeenActionSequence = Math.max(lastSeenActionSequence, state.getActionSequence());
+        receivedMatchState = true;
 
         boolean localTurn = !state.isMatchOver() && state.getActivePlayerId() == localPlayerId;
         if (mouseInputHandler != null) mouseInputHandler.setLocalPlayerTurn(localTurn);
@@ -561,8 +623,8 @@ public class GameOneScreen extends ScreenAdapter {
             hudRenderer.showFeedback(result);
             if (!postMatchShown) {
                 postMatchShown = true;
-                Gdx.app.postRunnable(() -> game.showPostMatch(teamIndex, chosenBuild,
-                    environment, localPlayerId, state));
+                pendingPostMatch = state;
+                postMatchDelay = 1.5f;
             }
         }
     }
@@ -600,8 +662,10 @@ public class GameOneScreen extends ScreenAdapter {
     }
 
     private boolean anyPlayerMoving() {
-        return localPlayer.getMovementController().isMoving()
-            || enemyPlayers.stream().anyMatch(player -> player.getMovementController().isMoving());
+        return !networkClient.isReady() || battleMenu!=null&&battleMenu.isOpen() || localPlayer.getMovementController().isMoving() || localPlayer.getAnimationController().isBusy()
+            || (abilityEffects != null && abilityEffects.isBusy())
+            || enemyPlayers.stream().anyMatch(player -> player.getMovementController().isMoving()
+                || player.getAnimationController().isBusy());
     }
 
     @Override
@@ -615,12 +679,18 @@ public class GameOneScreen extends ScreenAdapter {
 
     @Override
     public void hide() {
+        if(battleMenu!=null)battleMenu.close();
         Gdx.input.setInputProcessor(null);
     }
 
     @Override
     public void dispose() {
+        if(battleMenu!=null)battleMenu.dispose();
+        if(ambience!=null)ambience.dispose();
+        if(impacts!=null)impacts.dispose();
+        if (tactical != null) tactical.dispose();
         if (playerRenderer != null) playerRenderer.dispose();
+        if (surfaceAnimation != null) surfaceAnimation.dispose();
         if (mapRenderer != null) mapRenderer.dispose();
         if (hudRenderer != null) hudRenderer.dispose();
         if (battlefieldOverlay != null) battlefieldOverlay.dispose();

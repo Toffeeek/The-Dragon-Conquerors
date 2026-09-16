@@ -47,7 +47,8 @@ class AuthoritativeMatchTest {
         assertTrue(result.isAccepted());
         PlayerCombatState wraith = player(result, 0);
         assertTrue(wraith.isActionUsed());
-        assertEquals(60, wraith.getMana());
+        assertEquals(com.shared.shared.model.CharacterBuild.of(Race.UNDEAD, CharacterClass.WRAITH)
+            .createStats().getMaxMana() - AbilityType.CURSE.getManaCost(), wraith.getMana());
         assertEquals(3, wraith.getCooldowns().get("Curse"));
 
         CombatCommandResult second = match.useAbility(

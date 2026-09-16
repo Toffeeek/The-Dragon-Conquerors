@@ -21,6 +21,7 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@org.springframework.scheduling.annotation.EnableScheduling
 public class WebSocketEventListener {
     private final SimpMessageSendingOperations messages;
     private final RoomRegistry rooms;
@@ -28,11 +29,26 @@ public class WebSocketEventListener {
     @EventListener
     public void handleWebSocketListener(SessionDisconnectEvent event) {
         StompHeaderAccessor headers = StompHeaderAccessor.wrap(event.getMessage());
+        if (headers.getSessionAttributes() == null) return;
         Object playerId = headers.getSessionAttributes().get("ID");
         if (!(playerId instanceof Integer) || (Integer) playerId < 0) return;
 
-        RoomDisconnectResult result = rooms.disconnect(headers.getSessionId(), (Integer) playerId);
+        rooms.suspend(headers.getSessionId());
+        rooms.roomForSession(headers.getSessionId()).ifPresent(room -> {
+            var state = room.getMatches().snapshot();
+            if (state != null) messages.convertAndSend(room.destination(), Packet.builder()
+                .action(Action.MATCH_STATE).roomId(room.getId()).matchState(state).build());
+        });
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 1000)
+    public void expireDisconnected() {
+        rooms.expireDisconnected().forEach(this::broadcastDeparture);
+    }
+
+    public void broadcastDeparture(RoomDisconnectResult result) {
         if (result == null) return;
+        int playerId = result.getPlayerId();
 
         MatchRoom room = result.getRoom();
         log.info("Player {} disconnected from {}", playerId, room.getId());

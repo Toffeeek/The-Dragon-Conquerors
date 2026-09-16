@@ -5,6 +5,8 @@ public enum Action
 {
     JOIN_REQUEST,
     JOIN,
+    RESUME,
+    SYNC,
     ROOM_READY,
     START_TEST_MATCH,
     PRIVATE_JOIN_CONFIRMATION,

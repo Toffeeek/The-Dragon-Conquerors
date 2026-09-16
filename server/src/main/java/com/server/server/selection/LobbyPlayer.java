@@ -10,7 +10,7 @@ import com.shared.shared.model.Race;
 /** Immutable lobby identity plus the mutable authoritative position. */
 public final class LobbyPlayer {
     private final int id;
-    private final String sessionId;
+    private String sessionId;
     private final String username;
     private final CharacterClass characterClass;
     private final Race race;
@@ -31,6 +31,7 @@ public final class LobbyPlayer {
 
     public int getId() { return id; }
     public String getSessionId() { return sessionId; }
+    public void rebindSession(String sessionId) { this.sessionId = sessionId; }
     public String getUsername() { return username; }
     public CharacterClass getCharacterClass() { return characterClass; }
     public Race getRace() { return race; }

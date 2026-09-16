@@ -1,0 +1,6 @@
+Cinzel variable TrueType font, unmodified.
+Source: https://github.com/google/fonts/tree/main/ofl/cinzel
+Downloaded from https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel%5Bwght%5D.ttf
+Copyright 2020 The Cinzel Project Authors (https://github.com/NDISCOVER/Cinzel)
+License: SIL Open Font License 1.1; see Cinzel-OFL.txt.
+Used for fantasy headings and primary controls. Inter remains the small-text face.

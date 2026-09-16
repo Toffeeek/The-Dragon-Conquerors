@@ -1,68 +1,58 @@
-# Character Sprite Sheets
+# Character animation assets
 
-The game now loads the high-detail class sheets directly:
+The runtime uses the user-provided pack in `assets/characters/animated/`.
+The original `Character assets/` folder and older HD sheets are preserved, but
+the old 24-row/fixed-six-frame sheets are no longer loaded during gameplay.
 
-- `assets/characters/Warrior_HD.png`
-- `assets/characters/Mage_HD.png`
-- `assets/characters/Archer_HD.png`
-- `assets/characters/Paladin_HD.png`
-- `assets/characters/Rogue_HD.png`
+| Class | Character | Variant | Idle | Walk | Basic | Cast | Special | Hurt | Death |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Paladin | Knight | with shadows | 6 | 8 | 7 | 11 | 10 | 4 | 4 |
+| Wraith | Necromancer | without shadows | 6 | 6 | 9 | 10 | 10 | 4 | 9 |
+| Archer | Archer | with shadows | 6 | 8 | 9 | 6 | 12 | 4 | 4 |
+| Cleric | Priest | with shadows | 6 | 8 | 9 | 6 | 6 | 4 | 4 |
+| Mage | Wizard | with shadows | 6 | 8 | 6 | 9 | 9 | 4 | 4 |
+| Bard | Orc | with shadows | 6 | 8 | 6 | 6 | 6 | 4 | 4 |
 
-The original 48 x 48 sheets remain in the repository as animation-geometry source
-files and as a fallback reference for artists. Runtime rendering uses only the
-`*_HD.png` files through `SpriteAssets`.
+Each strip is one row of 100x100 cells. Transparent padding is intentional:
+bodies are roughly 20-30 pixels high. The renderer draws the full cell at four
+world units, anchored at source pixel (50,59), keeping feet and collision aligned
+without clipping swords or spell gestures. Artwork faces right and is mirrored
+for left-facing movement/attacks; vertical motion preserves horizontal facing.
 
-## Runtime layout
+`SpriteAssets` declares paths, lengths, timing, looping and per-ability animation
+selection. Idle/walk loop; other clips finish, death holds the final frame
+(the Necromancer dissolves), and revive resets the controller. No fake extra
+frames or directions are synthesized. Steady Aim intentionally uses an idle pose
+with a supplied buff effect.
 
-Each high-detail sheet is **576 x 2304 pixels** and contains **96 x 96 pixel
-frames**. Every row has six frames. Animation states use four consecutive rows
-in this direction order:
+`SOURCES.sha256` records imported PNG bytes after checking them against the
+requested source variants. Tests validate imported assets without requiring the
+large original pack to be included in a distribution. If art is intentionally
+replaced, update the manifest along with the profile metadata and tests.
 
-1. Down
-2. Left
-3. Right
-4. Up
+## Ability presentation
 
-| Rows | State | Looping |
-|---|---|---|
-| 0-3 | Idle | Yes |
-| 4-7 | Walk | Yes |
-| 8-11 | Attack | No |
-| 12-15 | Cast / skill | No |
-| 16-19 | Hurt | No |
-| 20-23 | Death | No |
+Player attack/cast strips do not include duplicated baked spell effects.
+`EffectAssets` loads the supplied standalone wizard, necromancer, priest, and
+arrow strips. Melee swings retain their painted weapon trails. Spell colors,
+travel and impact placement distinguish abilities without changing combat rules.
+Teleport uses the Necromancer portal at both endpoints; Eldritch Blast uses a
+projectile and impact effect and retains its push/stun.
 
-`PlayerAnimationController` selects the state, direction, and frame.
-`PlayerRenderer` splits each HD sheet into 96 x 96 regions, validates the exact
-24-row by 6-column grid, and draws the selected region. A malformed sheet is
-rejected instead of being cropped silently.
+The server sends a monotonic action sequence plus the actual source and target
+coordinates. This avoids replaying attacks on unrelated snapshots and supports
+missed shots, ally buffs, ground AoE and teleport. Hurt/death reactions wait for
+the attack impact, commands wait for presentation to finish, and the post-match
+screen waits for the final death animation.
 
-Combat already invokes the animation controller as follows:
+## Verification
 
-- Physical actions call `playAttack(..., false)` and display rows 8-11.
-- Spell/skill actions call `playAttack(..., true)` and display rows 12-15.
-- A successful hit calls `playHurt(...)` on the selected player.
-- A lethal hit calls `playDeath()` and holds the last death frame.
-- Movement continuously switches between idle and walk based on the path and
-  updates the facing direction.
+`./gradlew core:test server:test shared:test` checks source hashes, dimensions,
+class mappings, frame boundaries, looping, facing, full ability playback, delayed
+reactions, death/revive, event targeting and existing gameplay/map rules.
 
-## Rebuilding the HD files
-
-The high-detail files can be rebuilt deterministically from the animation-safe
-source sheets:
-
-```bash
-python3 tools/build_hd_character_sprites.py
-```
-
-The builder preserves all 144 animation cells while upgrading them to 96 x 96,
-adding class-specific material palettes, stronger pixel clusters, metal and
-cloth texture, edge lighting, outlines, and one-pixel highlights. It requires
-Pillow and SciPy.
-
-The older simple sheets can still be regenerated with:
-
-```bash
-python3 tools/generate_character_sprites.py
-python3 tools/build_hd_character_sprites.py
-```
+`./gradlew lwjgl3:animationPreview` opens an offline six-character preview using
+the production renderer and effect code. It starts paused. Keys 1-8 select idle,
+walk, basic attack, secondary, ultimate, hurt, death and revive. P plays/pauses;
+F steps 0.085 seconds. These keys are only for the developer preview; gameplay
+abilities remain mouse-driven.

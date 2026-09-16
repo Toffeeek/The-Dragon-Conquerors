@@ -41,6 +41,13 @@ public final class AuthoritativeMatch {
     private String lastMessage = "";
     private int lastActorId = -1;
     private AbilityType lastAbility;
+    private long actionSequence;
+    private int lastTargetId = -1;
+    private Vector2 lastTargetPoint;
+    private Vector2 lastActionOrigin;
+    private List<Integer> missedTargetIds = List.of();
+    private final BattleLedger ledger;
+    private final java.util.Set<Integer> disconnected = new java.util.HashSet<>();
 
     public AuthoritativeMatch(List<LobbyPlayer> lobbyPlayers, Environment environment) {
         this(lobbyPlayers, environment, new AbilityResolver(), true);
@@ -83,6 +90,7 @@ public final class AuthoritativeMatch {
         }
         this.context = new CombatContext(players.values(), environment);
         this.resolver = resolver;
+        this.ledger = new BattleLedger(lobbyPlayers);
         advanceTurn("Match begins");
     }
 
@@ -138,15 +146,25 @@ public final class AuthoritativeMatch {
 
         ServerCombatant target = players.get(targetPlayerId);
         Map<Integer, Vector2> positionsBefore = positions();
+        Map<Integer, Integer> healthBefore = new LinkedHashMap<>();
+        players.values().forEach(p -> healthBefore.put(p.getId(),p.getStats().getHp()));
         AbilityOutcome outcome = resolver.resolve(actor, ability, target, targetPoint, context);
         if (!outcome.isLegal()) {
             return CombatCommandResult.rejected(outcome.getRejection().getMessage());
         }
 
         actor.markActionUsed();
+        for (var p : players.values()) ledger.health(playerId,p.getId(),healthBefore.get(p.getId()),p.getStats().getHp());
         lastActorId = playerId;
         lastAbility = ability;
+        actionSequence++;
+        lastTargetId = targetPlayerId;
+        lastActionOrigin = new Vector2(positionsBefore.get(playerId));
+        lastTargetPoint = targetPoint != null ? new Vector2(targetPoint)
+            : target != null ? new Vector2(positionsBefore.get(targetPlayerId)) : new Vector2(lastActionOrigin);
         lastMessage = outcome.describe();
+        missedTargetIds = outcome.getTargets().stream().filter(result -> !result.isHit())
+            .map(AbilityOutcome.TargetResult::getTargetId).toList();
         resolvePushes(outcome, positionsBefore);
         for (ServerCombatant player : players.values()) {
             if (!player.getPosition().epsilonEquals(positionsBefore.get(player.getId()), 0.001f)) {
@@ -185,11 +203,16 @@ public final class AuthoritativeMatch {
     public MatchState snapshot() {
         List<PlayerCombatState> states = new ArrayList<>();
         for (ServerCombatant player : players.values()) {
-            states.add(player.snapshot(context, player.getId() == activePlayerId));
+            var state = player.snapshot(context, player.getId() == activePlayerId);
+            state.setConnected(!disconnected.contains(player.getId()));
+            states.add(state);
         }
         return MatchState.builder()
             .players(states)
+            .turnOrder(context.getTurnQueue().getOrder().stream().map(Combatant::getId).toList())
+            .statistics(ledger.snapshot())
             .activePlayerId(activePlayerId)
+            .nextPlayerId(matchOver || context.getTurnQueue().nextCandidate()==null ? -1 : context.getTurnQueue().nextCandidate().getId())
             .roundNumber(context.getTurnQueue().getRoundNumber())
             .environment(context.getEnvironment())
             .matchOver(matchOver)
@@ -198,10 +221,19 @@ public final class AuthoritativeMatch {
             .message(lastMessage)
             .lastActorId(lastActorId)
             .lastAbility(lastAbility)
+            .actionSequence(actionSequence)
+            .lastTargetId(lastTargetId)
+            .lastTargetPoint(lastTargetPoint == null ? null : new Vector2(lastTargetPoint))
+            .lastActionOrigin(lastActionOrigin == null ? null : new Vector2(lastActionOrigin))
+            .missedTargetIds(missedTargetIds)
             .build();
     }
 
     public boolean contains(int playerId) { return players.containsKey(playerId); }
+    public MatchState setConnected(int playerId, boolean connected) {
+        if (connected) disconnected.remove(playerId); else disconnected.add(playerId);
+        return snapshot();
+    }
     public int getActivePlayerId() { return activePlayerId; }
 
     private void advanceTurn(String prefix) {
@@ -222,6 +254,7 @@ public final class AuthoritativeMatch {
 
             TurnStartReport report = context.beginTurn(next,
                 battlefield.isHazard(next.getPosition()));
+            for (var credit : report.getDamageCredits()) ledger.damage(credit.sourcePlayerId(),credit.damage(),credit.eliminated());
             if (!report.isUneventful()) append(message, next.getUsername() + ": " + report.describe());
             if (isBattleFinished()) {
                 lastMessage = message.toString();
@@ -231,6 +264,7 @@ public final class AuthoritativeMatch {
             if (report.isTurnSkipped()) continue;
 
             activePlayerId = next.getId();
+            ledger.turn(activePlayerId);
             append(message, next.getUsername() + "'s turn");
             lastMessage = message.toString();
             return;
@@ -293,9 +327,17 @@ public final class AuthoritativeMatch {
             Vector2 start = positionsBefore.get(targetResult.getTargetId());
             if (target == null || start == null) continue;
 
-            Vector2 destination = target.getPosition();
+            Vector2 intended = new Vector2(target.getPosition());
+            Vector2 destination = com.shared.shared.model.world.KnockbackCollision.stopBeforePlayers(start, intended,
+                players.values().stream().filter(other -> other != target && other.isAlive())
+                    .map(ServerCombatant::getPosition).toList());
+            target.getPosition().set(destination);
+            if (!destination.epsilonEquals(intended, .0001f)) {
+                lastMessage += " " + target.getUsername() + " is stopped by another player.";
+            }
             if (battlefield.getEnvironment().isFallingLethal()
                 && battlefield.pathCrossesLethalFall(start, destination)) {
+                if (target.isAlive()) ledger.environmentalKill(outcome.getActorId());
                 target.getStats().setHp(0);
                 target.getPosition().set(battlefield.lastWalkablePoint(start, destination));
                 lastMessage += " " + target.getUsername() + (battlefield.getEnvironment() == Environment.LAVA

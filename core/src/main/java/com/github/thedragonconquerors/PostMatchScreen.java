@@ -85,19 +85,16 @@ public final class PostMatchScreen extends ScreenAdapter {
 
         Table panel = new Table();
         panel.setBackground(theme.panel());
-        panel.pad(42f, 58f, 42f, 58f);
+        panel.pad(24f, 32f, 24f, 32f);
 
-        Label eyebrow = new Label("BATTLE CONCLUDED", skin, "section");
         Label result = new Label(resultTitle(), skin, "title");
+        Label.LabelStyle resultStyle = new Label.LabelStyle(result.getStyle());
+        resultStyle.fontColor = com.badlogic.gdx.graphics.Color.WHITE;
+        result.setStyle(resultStyle);
         result.setColor(resultColor());
-        Label summary = new Label(resultSummary(), skin, "subtitle");
-        summary.setWrap(true);
-        summary.setAlignment(Align.center);
 
         voteLabel = new Label("Rematch votes: 0/" + requiredVotes(), skin, "class-role");
-        statusLabel = new Label(
-            testingMode ? "All connected players must agree to restart this test."
-                : "All four players must agree to restart this battlefield.", skin, "caption");
+        statusLabel = new Label("", skin, "caption");
         statusLabel.setWrap(true);
         statusLabel.setAlignment(Align.center);
 
@@ -115,16 +112,53 @@ public final class PostMatchScreen extends ScreenAdapter {
         });
 
         Table buttons = new Table();
-        buttons.add(rematchButton).width(220f).height(52f).padRight(14f);
-        buttons.add(menuButton).width(220f).height(52f);
+        float textScale=com.github.thedragonconquerors.ui.PresentationSettings.textScale();
+        buttons.add(rematchButton).width(220f*textScale).height(52f*textScale).padRight(14f);
+        buttons.add(menuButton).width(220f*textScale).height(52f*textScale);
+        buttons.setBackground(theme.panel());
+        buttons.pad(12);
 
-        panel.add(eyebrow).padBottom(14f).row();
-        panel.add(result).padBottom(18f).row();
-        panel.add(summary).width(610f).padBottom(28f).row();
+        panel.add(result).padBottom(8f).row();
+        panel.add(createVictors()).padBottom(10).row();
+        panel.add(createStatistics()).padBottom(16).row();
         panel.add(voteLabel).padBottom(10f).row();
         panel.add(statusLabel).width(600f).padBottom(28f).row();
-        panel.add(buttons).row();
-        root.add(panel).width(760f);
+        var scrollStyle=new com.badlogic.gdx.scenes.scene2d.ui.ScrollPane.ScrollPaneStyle();
+        scrollStyle.vScroll=theme.solid(new com.badlogic.gdx.graphics.Color(.1f,.1f,.12f,1));
+        scrollStyle.vScroll.setMinWidth(6);
+        scrollStyle.vScrollKnob=theme.solid(FantasyUiTheme.GOLD_DIM);
+        scrollStyle.vScrollKnob.setMinWidth(6);scrollStyle.vScrollKnob.setMinHeight(22);
+        com.badlogic.gdx.scenes.scene2d.ui.ScrollPane scroll=new com.badlogic.gdx.scenes.scene2d.ui.ScrollPane(panel,scrollStyle);
+        scroll.setScrollingDisabled(true,false);scroll.setOverscroll(false,false);
+        scroll.setFadeScrollBars(false);
+        root.add(scroll).width(1040f).maxHeight(550).row();
+        root.add(buttons).padTop(12);
+        com.github.thedragonconquerors.ui.UiMotion.reveal(panel);
+    }
+    private Table createVictors() {
+        Table winners=new Table();
+        if(finalState==null || finalState.getWinningTeam()==0)return winners;
+        // Original idle animation plus a restrained celebratory bounce, no new combat state.
+        for(var row:finalState.getStatistics()) if(row.getTeamIndex()==finalState.getWinningTeam()) {
+            Table card=new Table();
+            card.add(new com.github.thedragonconquerors.ui.CharacterPortrait(game.getAssetService(),row.getCharacterClass(),true)).size(62,76).row();
+            Label name=new Label(row.getUsername(),skin,"section");name.setEllipsis(true);name.setAlignment(Align.center);
+            card.add(name).width(170);winners.add(card).padRight(18);
+        }
+        return winners;
+    }
+    private Table createStatistics() {
+        Table stats=new Table();stats.setBackground(theme.inset());stats.pad(12);
+        String[] titles={"PLAYER","DAMAGE","HEAL","KOs","ENV. KOs","TURNS"};
+        for(int i=0;i<titles.length;i++)stats.add(new Label(titles[i],skin,"section")).width(i==0?230:132).left().padBottom(9);
+        stats.row();
+        if(finalState!=null)for(var row:finalState.getStatistics()) {
+            Label name=new Label((row.getTeamIndex()==1?"A / ":"B / ")+row.getUsername(),skin,"default");name.setEllipsis(true);stats.add(name).width(230).left();
+            for(int value:new int[]{row.getDamageDealt(),row.getHealingDone(),row.getEliminations(),row.getEnvironmentalKills(),row.getTurnsPlayed()})
+                stats.add(new Label(Integer.toString(value),skin,"default")).width(132).left();
+            stats.row();
+        }
+        return stats;
     }
 
     private void requestRematch() {
@@ -156,6 +190,15 @@ public final class PostMatchScreen extends ScreenAdapter {
                 break;
             case REMATCH_START:
                 beginRematch(packet);
+                break;
+            case MATCH_START:
+                if (packet.getMatchState() != null && !packet.getMatchState().isMatchOver()) beginRematch(packet);
+                else {
+                    rematchRequested = false;
+                    rematchButton.setDisabled(false);
+                    rematchButton.setText("VOTE REMATCH");
+                    statusLabel.setText("Connection restored. The completed match is synchronized.");
+                }
                 break;
             case LEAVE:
                 if (testingMode) {
@@ -219,12 +262,6 @@ public final class PostMatchScreen extends ScreenAdapter {
 
     private int requiredVotes() { return testingMode ? connectedPlayers : 4; }
 
-    private String resultSummary() {
-        if (finalState != null && finalState.getMessage() != null
-            && !finalState.getMessage().isBlank()) return finalState.getMessage();
-        return "The battle has ended.";
-    }
-
     private com.badlogic.gdx.graphics.Color resultColor() {
         if (finalState == null || finalState.getWinningTeam() == 0) return FantasyUiTheme.GOLD;
         return finalState.getWinningTeam() == teamIndex
@@ -234,6 +271,7 @@ public final class PostMatchScreen extends ScreenAdapter {
     @Override public void render(float delta) {
         ScreenUtils.clear(0.025f, 0.022f, 0.028f, 1f);
         stage.act(Math.min(delta, 1f / 30f));
+        if(theme.refreshTextScale())for(var actor:stage.getActors())com.github.thedragonconquerors.ui.UiMotion.relayout(actor);
         stage.draw();
     }
 

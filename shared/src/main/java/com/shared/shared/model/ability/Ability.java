@@ -31,7 +31,7 @@ public interface Ability {
     /** Class that can use this ability, or {@code null} if it is universal. */
     CharacterClass getOwnerClass();
 
-    /** Action-bar slot, which also determines the hotkey and the wire action. */
+    /** Ability-menu ordering; network commands identify the exact ability separately. */
     AbilitySlot getSlot();
 
     /** Mana spent on use; 0 means free. */

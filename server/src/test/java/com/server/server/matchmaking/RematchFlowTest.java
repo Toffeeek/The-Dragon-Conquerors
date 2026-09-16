@@ -62,6 +62,17 @@ class RematchFlowTest {
         assertFalse(duplicate.isStarted());
     }
 
+    @Test void disconnectClearsVotesAndBlocksRestartUntilEveryoneIsReady() {
+        MatchRoom room = completedRoom();
+        room.requestRematch(0);
+        room.suspendSession("s1");
+        assertEquals(0, room.rematchVoteCount());
+        assertFalse(room.requestRematch(0).isAccepted());
+        room.markReady("s1");
+        for (int i = 0; i < 3; i++) assertFalse(room.requestRematch(i).isStarted());
+        assertTrue(room.requestRematch(3).isStarted());
+    }
+
     @Test
     void rematchIsRejectedBeforeCompletionOrAfterAPlayerLeaves() {
         MatchRoom room = fullRoom();
@@ -110,6 +121,7 @@ class RematchFlowTest {
         room.getLobby().addPlayer(selection("A2", 1, CharacterClass.MAGE, Race.ELF), "s1");
         room.getLobby().addPlayer(selection("C1", 2, CharacterClass.PALADIN, Race.HUMAN), "s2");
         room.getLobby().addPlayer(selection("C2", 2, CharacterClass.CLERIC, Race.DRAGONBORNE), "s3");
+        for (int i = 0; i < 4; i++) room.markReady("s" + i);
         return room;
     }
 

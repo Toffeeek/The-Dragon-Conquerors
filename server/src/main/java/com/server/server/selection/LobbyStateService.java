@@ -40,6 +40,10 @@ public class LobbyStateService {
     }
 
     public static String validateSelection(Packet packet) {
+        if (packet != null && packet.getUsername() != null
+            && (packet.getUsername().trim().length() > 32 || packet.getUsername().codePoints().anyMatch(Character::isISOControl))) {
+            return "Player names must be at most 32 characters, without control characters.";
+        }
         if (packet == null || packet.getCharacterClass() == null || packet.getRace() == null) {
             return "Choose both a class and race before joining.";
         }

@@ -26,6 +26,12 @@ import java.util.List;
  * either being able to corrupt it.</p>
  */
 public final class TurnStartReport {
+    public record DamageCredit(int sourcePlayerId, int damage, boolean eliminated) {}
+    private List<DamageCredit> damageCredits = List.of();
+    public List<DamageCredit> getDamageCredits() { return damageCredits; }
+    TurnStartReport withDamageCredits(List<DamageCredit> credits) {
+        damageCredits = List.copyOf(credits); return this;
+    }
 
     private final int combatantId;
     private final int damageTaken;

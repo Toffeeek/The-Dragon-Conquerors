@@ -6,7 +6,6 @@ import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.loaders.resolvers.InternalFileHandleResolver;
-import com.badlogic.gdx.graphics.FPSLogger;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -63,7 +62,9 @@ public class Main extends Game
     private NetworkClient networkClient;
 
     private GLProfiler glProfiler;
-    private FPSLogger fpsLogger;
+    private float profileTitleTimer;
+    private com.github.thedragonconquerors.rendering.ConnectionOverlay connectionOverlay;
+    private volatile boolean recoveringConnection;
     private Process serverProcess;
     private Thread serverShutdownHook;
     private int localServerPort = SERVER_PORT;
@@ -81,14 +82,18 @@ public class Main extends Game
     public void create()
     {
 
-        Gdx.app.setLogLevel(Application.LOG_DEBUG);
+        boolean profiling = Boolean.getBoolean("tdc.profile");
+        Gdx.app.setLogLevel(profiling ? Application.LOG_DEBUG : Application.LOG_INFO);
         this.batch = new SpriteBatch();
         this.camera = new OrthographicCamera();
         this.viewport = new FitViewport(WORLD_WIDTH, WORLD_HEIGHT, camera);
         this.assetService = new AssetService(new InternalFileHandleResolver());
-        this.glProfiler = new GLProfiler(Gdx.graphics);
-        this.glProfiler.enable();
-        this.fpsLogger = new FPSLogger();
+        this.connectionOverlay = new com.github.thedragonconquerors.rendering.ConnectionOverlay(this::retryConnection, this::returnToMenu);
+        if (profiling) {
+            this.glProfiler = new GLProfiler(Gdx.graphics);
+            this.glProfiler.enable();
+        }
+        Gdx.graphics.setTitle("The Dragon Conquerors");
 
         serverShutdownHook = new Thread(this::stopLocalServer, "tdc-server-shutdown");
         Runtime.getRuntime().addShutdownHook(serverShutdownHook);
@@ -137,6 +142,7 @@ public class Main extends Game
     /** Disconnects the current client, stops a locally hosted server, and returns to the cached menu. */
     public void returnToMenu()
     {
+        connectionOverlay.hide();
         if(networkClient != null)
         {
             try
@@ -156,28 +162,37 @@ public class Main extends Game
 
     public boolean startLocalServer() throws IOException
     {
+        return startLocalServer(false);
+    }
+
+    public boolean startLocalServer(boolean practice) throws IOException
+    {
         if(serverProcess != null && serverProcess.isAlive()) return false;
 
-        File rootDir = findProjectRoot();
-        // Launch the wrapper with Java directly: Windows does not resolve a bare
-        // gradlew.bat against ProcessBuilder.directory(), especially in spaced paths.
+        // Extract the bundled companion, so hosting works outside the source checkout.
+        if (Runtime.version().feature() < 21) throw new IOException("Hosting requires Java 21+. Use the bundled game runtime.");
         String javaName = System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java";
         File javaExecutable = new File(System.getProperty("java.home"), "bin/" + javaName);
-        File wrapperJar = new File(rootDir, "gradle/wrapper/gradle-wrapper.jar");
+        java.nio.file.Path serverJar = java.nio.file.Files.createTempFile("tdc-server-", ".jar");
+        serverJar.toFile().deleteOnExit();
+        try (var bundled = Main.class.getResourceAsStream("/server/tdc-server.jar")) {
+            if (bundled == null) throw new IOException("Bundled server is missing. Rebuild or reinstall the complete game package.");
+            java.nio.file.Files.copy(bundled, serverJar, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
         localServerPort = findAvailablePort();
 
         ProcessBuilder processBuilder = new ProcessBuilder(
             javaExecutable.getAbsolutePath(),
-            "-Dorg.gradle.appname=gradlew",
-            "-jar", wrapperJar.getAbsolutePath(),
-            ":server:bootRun",
-            "--args=--server.port=" + localServerPort
+            "-jar", serverJar.toAbsolutePath().toString(),
+            "--server.port=" + localServerPort,
+            "--server.address=" + (practice ? "127.0.0.1" : "0.0.0.0"),
+            "--game.testing-mode=" + practice
         );
-        processBuilder.directory(rootDir);
         processBuilder.redirectErrorStream(true);
         serverProcess = processBuilder.start();
 
-        Thread logThread = new Thread(() -> consumeServerOutput(serverProcess), "tdc-server-output");
+        Process startedProcess = serverProcess;
+        Thread logThread = new Thread(() -> consumeServerOutput(startedProcess), "tdc-server-output");
         logThread.setDaemon(true);
         logThread.start();
         return true;
@@ -308,21 +323,6 @@ public class Main extends Game
         return Optional.empty();
     }
 
-    private File findProjectRoot() throws IOException
-    {
-        File current = new File(System.getProperty("user.dir")).getCanonicalFile();
-        while(current != null)
-        {
-            if(new File(current, "gradlew").isFile() && new File(current, "settings.gradle").isFile())
-            {
-                return current;
-            }
-            current = current.getParentFile();
-        }
-
-        throw new IOException("Could not find project root containing gradlew and settings.gradle");
-    }
-
     private void consumeServerOutput(Process process)
     {
         try(BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream())))
@@ -387,16 +387,31 @@ public class Main extends Game
     @Override
     public void render()
     {
-        glProfiler.reset();
+        if (glProfiler != null) glProfiler.reset();
         super.render();
-        Gdx.graphics.setTitle("TDC - Draw Calls: " + glProfiler.getDrawCalls());
-//        fpsLogger.log();
+        if (networkClient != null) {
+            networkClient.pollTimeout();
+            var state = networkClient.getState();
+            if (state == NetworkClient.State.FAILED || state == NetworkClient.State.RECOVERING) {
+                connectionOverlay.render(networkClient.getFailure(), recoveringConnection || state == NetworkClient.State.RECOVERING,
+                    Gdx.graphics.getDeltaTime());
+            } else connectionOverlay.hide();
+        } else connectionOverlay.hide();
+        if (glProfiler != null) {
+            profileTitleTimer += Gdx.graphics.getDeltaTime();
+            if (profileTitleTimer >= 1f) {
+                Gdx.graphics.setTitle("The Dragon Conquerors - FPS: " + Gdx.graphics.getFramesPerSecond()
+                    + " | Draw calls: " + glProfiler.getDrawCalls());
+                profileTitleTimer = 0f;
+            }
+        }
     }
 
 
 
     @Override
     public void dispose(){
+        connectionOverlay.dispose();
         screenCache.values().forEach(Screen::dispose);
         screenCache.clear();
 
@@ -404,7 +419,10 @@ public class Main extends Game
         stopLocalServer();
         removeServerShutdownHook();
         this.batch.dispose();
-        this.assetService.debugDiagnostic();
+        if (glProfiler != null) {
+            this.assetService.debugDiagnostic();
+            glProfiler.disable();
+        }
         this.assetService.dispose();
     }
 
@@ -420,6 +438,17 @@ public class Main extends Game
         {
             // JVM shutdown already started; the hook will run normally.
         }
+    }
+
+    private void retryConnection() {
+        NetworkClient client = networkClient;
+        if (client == null || recoveringConnection) return;
+        recoveringConnection = true;
+        Thread worker = new Thread(() -> {
+            try { client.recover(); } catch (Exception ignored) { /* NetworkClient exposes the failure to the overlay. */ }
+            finally { recoveringConnection = false; }
+        }, "tdc-reconnect");
+        worker.setDaemon(true); worker.start();
     }
 
 }

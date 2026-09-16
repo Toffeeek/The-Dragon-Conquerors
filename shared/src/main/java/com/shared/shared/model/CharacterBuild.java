@@ -114,7 +114,7 @@ public final class CharacterBuild {
     //  Abilities
     // ──────────────────────────────────────────────────────────────────────
 
-    /** This build's abilities in action-bar order; index 0 is hotkey {@code [1]}. */
+    /** This build's abilities in mouse-menu order, primary first. */
     public List<AbilityType> abilities() {
         return AbilityType.forClass(characterClass);
     }

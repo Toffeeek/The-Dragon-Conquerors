@@ -64,6 +64,19 @@ class BattlefieldNavigationTest {
         }
     }
 
+    @Test void cachedNodeClassificationMatchesCollisionOnEveryMap() {
+        for (Environment environment : Environment.values()) {
+            BattlefieldDefinition map = BattlefieldDefinition.forEnvironment(environment);
+            BattlefieldNavigation navigation = new BattlefieldNavigation(map);
+            for (int col = 0; col < 240; col++) for (int row = 0; row < 136; row++) {
+                assertEquals(map.isWalkable(new Vector2((col + .5f) * BattlefieldNavigation.NODE_SIZE,
+                    (row + .5f) * BattlefieldNavigation.NODE_SIZE)), navigation.isNodeWalkable(col, row));
+            }
+            assertFalse(navigation.isNodeWalkable(-1, 0));
+            assertFalse(navigation.isNodeWalkable(240, 136));
+        }
+    }
+
     private void checkSegments(Vector2 start, List<Vector2> path, List<Vector2> occupied) {
         for (Vector2 point : path) { assertTrue(nav.segmentClear(start, point, occupied)); start = point; }
     }
